@@ -1,0 +1,5 @@
+export { default as AdminDashboard } from './AdminDashboard.jsx'
+export { default as CustomerDashboard } from './CustomerDashboard.jsx'
+export { default as OwnerDashboard } from './OwnerDashboard.jsx'
+export { default as ChefDashboard } from './ChefDashboard.jsx'
+export { default as WaiterDashboard } from './WaiterDashboard.jsx'

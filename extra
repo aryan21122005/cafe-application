@@ -1,0 +1,33 @@
+<button
+                    type="button"
+                    onClick={() => setRole('ADMIN')}
+                    className={
+                      role === 'ADMIN'
+                        ? 'rounded-xl border border-emerald-600 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white'
+                        : 'rounded-xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50'
+                    }
+                  >
+                    Admin
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRole('CHEF')}
+                    className={
+                      role === 'CHEF'
+                        ? 'rounded-xl border border-emerald-600 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white'
+                        : 'rounded-xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50'
+                    }
+                  >
+                    Chef
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRole('WAITER')}
+                    className={
+                      role === 'WAITER'
+                        ? 'rounded-xl border border-emerald-600 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white'
+                        : 'rounded-xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50'
+                    }
+                  >
+                    Waiter
+                  </button>
