@@ -17,9 +17,6 @@ export default function Register() {
   const steps = ['Role', 'Personal details', 'Address', 'Academic info', 'Work experience', 'Documents']
   const [step, setStep] = useState(0)
   const [role, setRole] = useState('CUSTOMER')
-  const [adminKey, setAdminKey] = useState('')
-  const [privUsername, setPrivUsername] = useState('')
-  const [privPassword, setPrivPassword] = useState('')
   const [documents, setDocuments] = useState([])
 
   const [personalDetails, setPersonalDetails] = useState({
@@ -67,9 +64,6 @@ export default function Register() {
 
   const canGoNext = useMemo(() => {
     if (step === 0) {
-      if (role === 'ADMIN' || role === 'CHEF' || role === 'WAITER') {
-        return adminKey.trim().length > 0 && privUsername.trim().length > 0 && privPassword.trim().length > 0
-      }
       return !!role
     }
 
@@ -103,9 +97,6 @@ export default function Register() {
   const canSubmit = useMemo(() => {
     return (
       role &&
-      (role === 'ADMIN' || role === 'CHEF' || role === 'WAITER'
-        ? adminKey.trim() && privUsername.trim() && privPassword.trim()
-        : true) &&
       personalDetails.firstName.trim() &&
       personalDetails.lastName.trim() &&
       personalDetails.email.trim() &&
@@ -189,8 +180,6 @@ export default function Register() {
       const msg = await registerUser(
         {
           role,
-          username: role === 'ADMIN' || role === 'CHEF' || role === 'WAITER' ? privUsername.trim() : undefined,
-          password: role === 'ADMIN' || role === 'CHEF' || role === 'WAITER' ? privPassword : undefined,
           personalDetails: {
             firstName: personalDetails.firstName.trim(),
             lastName: personalDetails.lastName.trim(),
@@ -209,8 +198,7 @@ export default function Register() {
           academicInfoList: cleanedAcademic,
           workExperienceList: cleanedWork
         },
-        documents,
-        role === 'ADMIN' || role === 'CHEF' || role === 'WAITER' ? adminKey : undefined
+        documents
       )
       setSuccess(typeof msg === 'string' ? msg : 'Registration successful')
       setTimeout(() => navigate('/login'), 800)
@@ -275,6 +263,7 @@ export default function Register() {
                   >
                     Customer
                   </button>
+
                   <button
                     type="button"
                     onClick={() => setRole('OWNER')}
@@ -286,43 +275,8 @@ export default function Register() {
                   >
                     Cafe Owner
                   </button>
-                  
                 </div>
               </Field>
-
-              {role === 'ADMIN' || role === 'CHEF' || role === 'WAITER' ? (
-                <Field label="Admin Key">
-                  <input
-                    value={adminKey}
-                    onChange={(e) => setAdminKey(e.target.value)}
-                    className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
-                    placeholder="Enter admin registration key"
-                  />
-                </Field>
-              ) : null}
-
-              {role === 'ADMIN' || role === 'CHEF' || role === 'WAITER' ? (
-                <Field label="Username">
-                  <input
-                    value={privUsername}
-                    onChange={(e) => setPrivUsername(e.target.value)}
-                    className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
-                    placeholder="Choose a username"
-                  />
-                </Field>
-              ) : null}
-
-              {role === 'ADMIN' || role === 'CHEF' || role === 'WAITER' ? (
-                <Field label="Password">
-                  <input
-                    type="password"
-                    value={privPassword}
-                    onChange={(e) => setPrivPassword(e.target.value)}
-                    className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
-                    placeholder="Choose a password"
-                  />
-                </Field>
-              ) : null}
             </>
           ) : null}
 

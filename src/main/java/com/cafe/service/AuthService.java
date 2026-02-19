@@ -10,9 +10,9 @@ import java.util.List;
 
 public interface AuthService {
 
-    String register(RegisterRequest request, String adminRegistrationKey);
+    String register(RegisterRequest request);
 
-    String register(RegisterRequest request, List<MultipartFile> documents, String adminRegistrationKey);
+    String register(RegisterRequest request, List<MultipartFile> documents);
 
     LoginResponse login(LoginRequest request);
 

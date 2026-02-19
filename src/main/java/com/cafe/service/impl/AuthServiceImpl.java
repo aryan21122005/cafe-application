@@ -13,7 +13,6 @@ import com.cafe.service.AuthService;
 import com.cafe.service.EmailService;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,9 +37,6 @@ public class AuthServiceImpl implements AuthService {
 
     @Autowired(required = false)
     private EmailService emailService;
-
-    @Value("${admin.registration.key:}")
-    private String adminRegistrationKey;
 
     private String generateTempPassword() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 10);
@@ -74,7 +70,7 @@ public class AuthServiceImpl implements AuthService {
     // ---------- REGISTER ----------
     @Override
     @Transactional
-    public String register(RegisterRequest request, String adminRegistrationKeyHeader) {
+    public String register(RegisterRequest request) {
 
         Role role;
         try {
@@ -83,15 +79,7 @@ public class AuthServiceImpl implements AuthService {
             return "Invalid role";
         }
 
-        boolean isPrivilegedRegistration = role == Role.ADMIN || role == Role.CHEF || role == Role.WAITER;
-        if (isPrivilegedRegistration) {
-            if (adminRegistrationKey == null || adminRegistrationKey.isBlank()) {
-                return "Invalid role";
-            }
-            if (adminRegistrationKeyHeader == null || !adminRegistrationKey.equals(adminRegistrationKeyHeader)) {
-                return "Invalid role";
-            }
-        } else if (!(role == Role.CUSTOMER || role == Role.OWNER)) {
+        if (!(role == Role.CUSTOMER || role == Role.OWNER)) {
             return "Invalid role";
         }
 
@@ -133,27 +121,21 @@ public class AuthServiceImpl implements AuthService {
             return "Phone already exists";
         }
 
-        String username;
-        if (isPrivilegedRegistration && request.getUsername() != null && !request.getUsername().isBlank()) {
-            username = request.getUsername().trim();
-        } else {
-            username = generateUsername(request);
-        }
+        String username = generateUsername(request);
 
         if (userRepository.findByUsername(username).isPresent()) {
             return "Username already exists";
         }
 
-        boolean hasCustomPassword = isPrivilegedRegistration && request.getPassword() != null && !request.getPassword().isBlank();
-        String rawPassword = hasCustomPassword ? request.getPassword() : generateTempPassword();
+        String rawPassword = generateTempPassword();
 
         User user = new User();
 
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(rawPassword));
         user.setRole(role);
-        user.setForcePasswordChange(!hasCustomPassword);
-        user.setApprovalStatus(isPrivilegedRegistration ? ApprovalStatus.APPROVED : ApprovalStatus.PENDING);
+        user.setForcePasswordChange(true);
+        user.setApprovalStatus(ApprovalStatus.PENDING);
 
         user.setPersonalDetails(request.getPersonalDetails());
         user.setAddress(request.getAddress());
@@ -167,7 +149,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public String register(RegisterRequest request, List<MultipartFile> documents, String adminRegistrationKeyHeader) {
+    public String register(RegisterRequest request, List<MultipartFile> documents) {
 
         if (documents == null || documents.isEmpty()) {
             return "Documents are required";
@@ -180,15 +162,7 @@ public class AuthServiceImpl implements AuthService {
             return "Invalid role";
         }
 
-        boolean isPrivilegedRegistration = role == Role.ADMIN || role == Role.CHEF || role == Role.WAITER;
-        if (isPrivilegedRegistration) {
-            if (adminRegistrationKey == null || adminRegistrationKey.isBlank()) {
-                return "Invalid role";
-            }
-            if (adminRegistrationKeyHeader == null || !adminRegistrationKey.equals(adminRegistrationKeyHeader)) {
-                return "Invalid role";
-            }
-        } else if (!(role == Role.CUSTOMER || role == Role.OWNER)) {
+        if (!(role == Role.CUSTOMER || role == Role.OWNER)) {
             return "Invalid role";
         }
 
@@ -230,27 +204,21 @@ public class AuthServiceImpl implements AuthService {
             return "Phone already exists";
         }
 
-        String username;
-        if (isPrivilegedRegistration && request.getUsername() != null && !request.getUsername().isBlank()) {
-            username = request.getUsername().trim();
-        } else {
-            username = generateUsername(request);
-        }
+        String username = generateUsername(request);
 
         if (userRepository.findByUsername(username).isPresent()) {
             return "Username already exists";
         }
 
-        boolean hasCustomPassword = isPrivilegedRegistration && request.getPassword() != null && !request.getPassword().isBlank();
-        String rawPassword = hasCustomPassword ? request.getPassword() : generateTempPassword();
+        String rawPassword = generateTempPassword();
 
         User user = new User();
 
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(rawPassword));
         user.setRole(role);
-        user.setForcePasswordChange(!hasCustomPassword);
-        user.setApprovalStatus(isPrivilegedRegistration ? ApprovalStatus.APPROVED : ApprovalStatus.PENDING);
+        user.setForcePasswordChange(true);
+        user.setApprovalStatus(ApprovalStatus.PENDING);
 
         user.setPersonalDetails(request.getPersonalDetails());
         user.setAddress(request.getAddress());

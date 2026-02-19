@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { clearSession, getSession } from '../../lib/auth.js'
-import { approveUser, denyUser, getUserDetail, listUsers } from '../../lib/api.js'
+import { approveUser, denyUser, deleteUser, getUserDetail, listUsers } from '../../lib/api.js'
 
 const SECTIONS = {
   overview: 'Overview',
@@ -102,6 +102,20 @@ export default function AdminDashboard() {
       await refresh()
     } catch (e) {
       setError(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to deny user')
+    } finally {
+      setActionBusyId(null)
+    }
+  }
+
+  async function onDeleteUser(id) {
+    if (!window.confirm('Delete this user? This cannot be undone.')) return
+    setActionBusyId(id)
+    setError('')
+    try {
+      await deleteUser(id)
+      await refresh()
+    } catch (e) {
+      setError(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to delete user')
     } finally {
       setActionBusyId(null)
     }
@@ -271,7 +285,7 @@ export default function AdminDashboard() {
 
   function Card({ label, value }) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="rounded-2xl border border-black/10 bg-white/70 p-5">
         <div className="text-xs font-semibold text-slate-500">{label}</div>
         <div className="mt-2 text-3xl font-extrabold">{value}</div>
       </div>
@@ -298,8 +312,8 @@ export default function AdminDashboard() {
         onClick={() => setSection(item.key)}
         className={
           active
-            ? 'rounded-lg bg-emerald-500/15 px-3 py-2 text-left text-sm font-semibold text-emerald-200'
-            : 'rounded-lg px-3 py-2 text-left text-sm text-white/70 hover:bg-white/10'
+            ? 'rounded-lg bg-emerald-600/15 px-3 py-2 text-left text-sm font-semibold text-emerald-800'
+            : 'rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-white'
         }
       >
         {item.label}
@@ -373,7 +387,7 @@ export default function AdminDashboard() {
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="rounded-2xl border border-black/10 bg-white/70 p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold">Approval status</div>
@@ -383,7 +397,7 @@ export default function AdminDashboard() {
             </div>
             <div className="mt-4 grid gap-4 md:grid-cols-2 md:items-center">
               <PieChart data={approvalData} size={190} />
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-2xl border border-black/10 bg-white/50 p-4">
                 <div className="text-sm font-semibold">Quick insights</div>
                 <div className="mt-2 grid gap-2 text-sm text-slate-700">
                   <div>
@@ -406,7 +420,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="rounded-2xl border border-black/10 bg-white/70 p-5">
             <div className="text-sm font-semibold">Users by role</div>
             <div className="mt-1 text-xs text-slate-500">Distribution of roles across the platform</div>
             <div className="mt-4">
@@ -604,8 +618,8 @@ export default function AdminDashboard() {
                         )}
                       </td>
                       <td className="px-5 py-3">
-                        {String(u.approvalStatus || 'PENDING').toUpperCase() === 'PENDING' ? (
-                          <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2">
+                          {String(u.approvalStatus || 'PENDING').toUpperCase() === 'PENDING' ? (
                             <button
                               type="button"
                               className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
@@ -614,6 +628,8 @@ export default function AdminDashboard() {
                             >
                               Approve
                             </button>
+                          ) : null}
+                          {String(u.approvalStatus || 'PENDING').toUpperCase() === 'PENDING' ? (
                             <button
                               type="button"
                               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
@@ -622,10 +638,16 @@ export default function AdminDashboard() {
                             >
                               Deny
                             </button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-500">-</span>
-                        )}
+                          ) : null}
+                          <button
+                            type="button"
+                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                            disabled={actionBusyId === u.id}
+                            onClick={() => onDeleteUser(u.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -842,22 +864,22 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
+    <div className="min-h-screen bg-[#EDE4DA] text-slate-900">
       <div className="flex min-h-screen">
-        <aside className="hidden w-64 flex-col border-r border-slate-200 bg-slate-900 text-white md:flex">
-          <div className="bg-emerald-600 px-5 py-4 text-lg font-extrabold">Digital Cafe Admin</div>
+        <aside className="hidden w-64 flex-col border-r border-black/10 bg-white/70 text-slate-900 md:flex">
+          <div className="border-b border-black/10 bg-white/60 px-5 py-4 text-lg font-extrabold text-slate-900">Digital Cafe Admin</div>
           <div className="px-5 py-6">
             <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-full bg-white/10" />
+              <div className="h-12 w-12 rounded-full border border-black/10 bg-white/70" />
               <div>
                 <div className="text-sm font-semibold">{session?.username || 'Admin'}</div>
-                <div className="text-xs text-white/60">Administrator</div>
+                <div className="text-xs text-slate-600">Administrator</div>
               </div>
             </div>
           </div>
 
           <div className="px-4">
-            <div className="mb-2 text-xs font-semibold text-white/50">Navigation</div>
+            <div className="mb-2 text-xs font-semibold text-slate-500">Navigation</div>
             <div className="grid gap-1">
               {menu.map((item) => (
                 <SidebarButton key={item.key} item={item} />
