@@ -3,11 +3,16 @@ package com.cafe.service.impl;
 import com.cafe.dto.AdminDecisionRequest;
 import com.cafe.dto.AdminCafeRow;
 import com.cafe.dto.AdminDocumentRow;
+import com.cafe.dto.AdminOwnerRow;
 import com.cafe.dto.AdminUserDetail;
 import com.cafe.dto.AdminUserRow;
+import com.cafe.dto.CafeProfileRequest;
+import com.cafe.dto.MenuItemRow;
+import com.cafe.dto.RegisterRequest;
 import com.cafe.entity.*;
 import com.cafe.repository.CafeRepository;
 import com.cafe.repository.DocumentRepository;
+import com.cafe.repository.MenuItemRepository;
 import com.cafe.repository.UserRepository;
 import com.cafe.service.AdminService;
 import com.cafe.service.EmailService;
@@ -24,6 +29,9 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.io.IOException;
+
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class AdminServiceImpl implements AdminService {
@@ -38,6 +46,9 @@ public class AdminServiceImpl implements AdminService {
 
     @Autowired
     private DocumentRepository documentRepository;
+
+    @Autowired
+    private MenuItemRepository menuItemRepository;
 
     @Autowired
     private BCryptPasswordEncoder passwordEncoder;
@@ -75,6 +86,211 @@ public class AdminServiceImpl implements AdminService {
                 return row;
             }).toList();
 
+            return ResponseEntity.ok(rows);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<List<AdminOwnerRow>> listOwners() {
+        try {
+            List<User> users = userRepository.findAll();
+            List<AdminOwnerRow> rows = new ArrayList<>();
+            for (User u : users) {
+                if (u == null || u.getRole() != Role.OWNER) continue;
+                AdminOwnerRow r = new AdminOwnerRow();
+                r.setId(u.getId());
+                r.setUsername(u.getUsername());
+                r.setEmail(u.getPersonalDetails() == null ? null : u.getPersonalDetails().getEmail());
+                r.setPhone(u.getPersonalDetails() == null ? null : u.getPersonalDetails().getPhone());
+                r.setHasCafe(cafeRepository.findByOwnerUsername(u.getUsername()).isPresent());
+                rows.add(r);
+            }
+            return ResponseEntity.ok(rows);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<String> createOwner(RegisterRequest request, List<MultipartFile> documents) {
+        try {
+            if (request == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid request");
+            }
+            if (documents == null || documents.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Documents are required");
+            }
+
+            Role role;
+            try {
+                role = Role.valueOf(request.getRole());
+            } catch (Exception ex) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid role");
+            }
+            if (role != Role.OWNER) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid role");
+            }
+
+            if (request.getPersonalDetails() == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Personal details are required");
+            }
+            if (request.getPersonalDetails().getFirstName() == null || request.getPersonalDetails().getFirstName().isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("First name is required");
+            }
+            if (request.getPersonalDetails().getLastName() == null || request.getPersonalDetails().getLastName().isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Last name is required");
+            }
+            if (request.getPersonalDetails().getEmail() == null || request.getPersonalDetails().getEmail().isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Email is required");
+            }
+            if (request.getPersonalDetails().getPhone() == null || request.getPersonalDetails().getPhone().isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Phone is required");
+            }
+            if (request.getAddress() == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Address is required");
+            }
+
+            String email = request.getPersonalDetails().getEmail().trim();
+            String phone = request.getPersonalDetails().getPhone().trim();
+            if (userRepository.existsByPersonalDetailsEmail(email)) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body("Email already exists");
+            }
+            if (userRepository.existsByPersonalDetailsPhone(phone)) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body("Phone already exists");
+            }
+
+            String username;
+            if (request.getUsername() != null && !request.getUsername().isBlank()) {
+                username = request.getUsername().trim();
+            } else {
+                String base = email.contains("@") ? email.substring(0, email.indexOf('@')) : email;
+                base = base.toLowerCase().replaceAll("[^a-z0-9]", "");
+                if (base.isBlank()) base = "owner";
+                username = base + "_owner";
+            }
+            if (userRepository.findByUsername(username).isPresent()) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body("Username already exists");
+            }
+
+            String rawPassword = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+
+            User owner = new User();
+            owner.setUsername(username);
+            owner.setPassword(passwordEncoder.encode(rawPassword));
+            owner.setRole(Role.OWNER);
+            owner.setForcePasswordChange(true);
+            owner.setApprovalStatus(ApprovalStatus.APPROVED);
+            owner.setPersonalDetails(request.getPersonalDetails());
+            owner.setAddress(request.getAddress());
+            owner.setAcademicInfoList(request.getAcademicInfoList());
+            owner.setWorkExperienceList(request.getWorkExperienceList());
+
+            List<Document> docList = new ArrayList<>();
+            for (MultipartFile file : documents) {
+                if (file == null || file.isEmpty()) continue;
+                Document doc = new Document();
+                doc.setDocumentName(file.getOriginalFilename());
+                doc.setDocumentType(file.getContentType());
+                doc.setSize(file.getSize());
+                doc.setUser(owner);
+                try {
+                    doc.setData(file.getBytes());
+                } catch (IOException e) {
+                    throw new RuntimeException("Failed to read uploaded document", e);
+                }
+                docList.add(doc);
+            }
+            if (docList.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Documents are required");
+            }
+            owner.setDocuments(docList);
+
+            userRepository.save(owner);
+
+            try {
+                if (emailService != null) {
+                    emailService.sendCredentials(email, username, rawPassword);
+                }
+            } catch (RuntimeException ex) {
+                log.warn("Failed to send owner credentials email username={} email={}", username, email, ex);
+            }
+
+            return ResponseEntity.status(HttpStatus.CREATED).body("Owner created");
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to create owner");
+        }
+    }
+
+    @Override
+    public ResponseEntity<AdminCafeRow> createCafeForOwner(String ownerUsername, CafeProfileRequest request) {
+        try {
+            if (ownerUsername == null || ownerUsername.isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (request == null || request.getCafeName() == null || request.getCafeName().isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            User owner = userRepository.findByUsername(ownerUsername.trim()).orElse(null);
+            if (owner == null || owner.getRole() != Role.OWNER) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (cafeRepository.findByOwnerUsername(owner.getUsername()).isPresent()) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            }
+
+            Cafe cafe = new Cafe();
+            cafe.setCafeName(request.getCafeName());
+            cafe.setDescription(request.getDescription());
+            cafe.setPhone(request.getPhone());
+            cafe.setEmail(request.getEmail());
+            cafe.setAddressLine(request.getAddressLine());
+            cafe.setCity(request.getCity());
+            cafe.setState(request.getState());
+            cafe.setPincode(request.getPincode());
+            cafe.setOpeningTime(request.getOpeningTime());
+            cafe.setClosingTime(request.getClosingTime());
+            cafe.setActive(request.getActive() == null ? true : request.getActive());
+            cafe.setOwner(owner);
+            cafeRepository.save(cafe);
+
+            AdminCafeRow row = new AdminCafeRow();
+            row.setId(cafe.getId());
+            row.setCafeName(cafe.getCafeName());
+            row.setActive(cafe.getActive());
+            row.setOwnerUsername(owner.getUsername());
+            row.setCity(cafe.getCity());
+            row.setState(cafe.getState());
+            return ResponseEntity.status(HttpStatus.CREATED).body(row);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<List<MenuItemRow>> listCafeMenu(Long cafeId) {
+        try {
+            if (cafeId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            List<MenuItem> items = menuItemRepository.findByCafeId(cafeId);
+            List<MenuItemRow> rows = items.stream().map(mi -> {
+                MenuItemRow r = new MenuItemRow();
+                r.setId(mi.getId());
+                r.setName(mi.getName());
+                r.setDescription(mi.getDescription());
+                r.setPrice(mi.getPrice());
+                r.setAvailable(mi.getAvailable());
+                r.setCategory(mi.getCategory());
+                return r;
+            }).toList();
             return ResponseEntity.ok(rows);
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();

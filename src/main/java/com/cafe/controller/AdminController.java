@@ -2,10 +2,15 @@ package com.cafe.controller;
 
 import com.cafe.dto.AdminDecisionRequest;
 import com.cafe.dto.AdminCafeRow;
+import com.cafe.dto.AdminOwnerRow;
 import com.cafe.dto.AdminUserDetail;
 import com.cafe.dto.AdminUserRow;
+import com.cafe.dto.CafeProfileRequest;
+import com.cafe.dto.RegisterRequest;
+import com.cafe.dto.MenuItemRow;
 import com.cafe.service.AdminService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,6 +19,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 @RestController
@@ -31,6 +39,32 @@ public class AdminController {
     @GetMapping("/cafes")
     public ResponseEntity<List<AdminCafeRow>> listCafes() {
         return adminService.listCafes();
+    }
+
+    @GetMapping("/owners")
+    public ResponseEntity<List<AdminOwnerRow>> listOwners() {
+        return adminService.listOwners();
+    }
+
+    @PostMapping(value = "/owners", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<String> createOwner(
+            @RequestPart("data") RegisterRequest request,
+            @RequestPart(value = "documents", required = false) List<MultipartFile> documents
+    ) {
+        return adminService.createOwner(request, documents);
+    }
+
+    @PostMapping("/cafes")
+    public ResponseEntity<AdminCafeRow> createCafeForOwner(
+            @RequestHeader(value = "X-OWNER-USERNAME", required = false) String ownerUsername,
+            @RequestBody CafeProfileRequest request
+    ) {
+        return adminService.createCafeForOwner(ownerUsername, request);
+    }
+
+    @GetMapping("/cafes/{id}/menu")
+    public ResponseEntity<List<MenuItemRow>> listCafeMenu(@PathVariable Long id) {
+        return adminService.listCafeMenu(id);
     }
 
     @GetMapping("/users/{id}")

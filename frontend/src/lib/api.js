@@ -37,6 +37,35 @@ export async function listCafes() {
   return res.data
 }
 
+export async function listOwners() {
+  const res = await api.get('/api/admin/owners')
+  return res.data
+}
+
+export async function createOwner(payload, documents) {
+  const fd = new FormData()
+  fd.append('data', new Blob([JSON.stringify(payload)], { type: 'application/json' }))
+  for (const file of documents || []) {
+    fd.append('documents', file)
+  }
+  const res = await api.post('/api/admin/owners', fd)
+  return res.data
+}
+
+export async function createCafeForOwner(ownerUsername, payload) {
+  const res = await api.post('/api/admin/cafes', payload, {
+    headers: {
+      'X-OWNER-USERNAME': ownerUsername
+    }
+  })
+  return res.data
+}
+
+export async function listCafeMenu(cafeId) {
+  const res = await api.get(`/api/admin/cafes/${cafeId}/menu`)
+  return res.data
+}
+
 export async function getUserDetail(id) {
   const res = await api.get(`/api/admin/users/${id}`)
   return res.data

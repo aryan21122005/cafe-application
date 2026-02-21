@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { clearSession, getSession } from '../../lib/auth.js'
-import { approveUser, denyUser, deleteUser, getUserDetail, listUsers } from '../../lib/api.js'
+import { approveUser, createCafeForOwner, createOwner, denyUser, deleteUser, getUserDetail, listCafeMenu, listCafes, listOwners, listUsers } from '../../lib/api.js'
 
 const SECTIONS = {
   overview: 'Overview',
+  owners: 'Cafe Owner Management',
   cafes: 'Cafe Management',
   users: 'User Management',
   orders: 'Order Monitoring',
@@ -21,6 +22,12 @@ export default function AdminDashboard() {
 
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [cafes, setCafes] = useState([])
+  const [cafesLoading, setCafesLoading] = useState(false)
+  const [cafesError, setCafesError] = useState('')
+  const [owners, setOwners] = useState([])
+  const [ownersLoading, setOwnersLoading] = useState(false)
+  const [ownersError, setOwnersError] = useState('')
   const [error, setError] = useState('')
   const [actionBusyId, setActionBusyId] = useState(null)
 
@@ -32,6 +39,47 @@ export default function AdminDashboard() {
   const [selectedUser, setSelectedUser] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
+
+  const [selectedCafeId, setSelectedCafeId] = useState(null)
+  const [selectedCafe, setSelectedCafe] = useState(null)
+  const [cafeMenu, setCafeMenu] = useState([])
+  const [cafeDetailLoading, setCafeDetailLoading] = useState(false)
+  const [cafeDetailError, setCafeDetailError] = useState('')
+
+  const [showAddOwner, setShowAddOwner] = useState(false)
+  const [addOwnerBusy, setAddOwnerBusy] = useState(false)
+  const [addOwnerErr, setAddOwnerErr] = useState('')
+  const [addOwnerMsg, setAddOwnerMsg] = useState('')
+  const [ownerFirstName, setOwnerFirstName] = useState('')
+  const [ownerLastName, setOwnerLastName] = useState('')
+  const [ownerEmail, setOwnerEmail] = useState('')
+  const [ownerPhone, setOwnerPhone] = useState('')
+  const [ownerContactNo, setOwnerContactNo] = useState('')
+  const [ownerGender, setOwnerGender] = useState('')
+  const [ownerMaritalStatus, setOwnerMaritalStatus] = useState('')
+  const [ownerStreet, setOwnerStreet] = useState('')
+  const [ownerCity, setOwnerCity] = useState('')
+  const [ownerState, setOwnerState] = useState('')
+  const [ownerPincode, setOwnerPincode] = useState('')
+  const [ownerDocs, setOwnerDocs] = useState([])
+
+  const [showAddCafe, setShowAddCafe] = useState(false)
+  const [addCafeBusy, setAddCafeBusy] = useState(false)
+  const [addCafeErr, setAddCafeErr] = useState('')
+  const [addCafeMsg, setAddCafeMsg] = useState('')
+  const [cafeName, setCafeName] = useState('')
+  const [cafeDesc, setCafeDesc] = useState('')
+  const [cafePhone, setCafePhone] = useState('')
+  const [cafeEmail, setCafeEmail] = useState('')
+  const [cafeAddressLine, setCafeAddressLine] = useState('')
+  const [cafeCity, setCafeCity] = useState('')
+  const [cafeState, setCafeState] = useState('')
+  const [cafePincode, setCafePincode] = useState('')
+  const [cafeOpeningTime, setCafeOpeningTime] = useState('')
+  const [cafeClosingTime, setCafeClosingTime] = useState('')
+  const [cafeActive, setCafeActive] = useState(true)
+  const [ownerSearch, setOwnerSearch] = useState('')
+  const [selectedOwnerUsername, setSelectedOwnerUsername] = useState('')
 
   async function refresh() {
     setLoading(true)
@@ -45,6 +93,31 @@ export default function AdminDashboard() {
       setLoading(false)
     }
 
+  }
+
+  async function refreshOwners() {
+    setOwnersLoading(true)
+    setOwnersError('')
+    try {
+      const data = await listOwners()
+      setOwners(Array.isArray(data) ? data : [])
+    } catch (e) {
+      setOwnersError(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to load owners')
+    } finally {
+      setOwnersLoading(false)
+    }
+  }
+  async function refreshCafes() {
+    setCafesLoading(true)
+    setCafesError('')
+    try {
+      const data = await listCafes()
+      setCafes(Array.isArray(data) ? data : [])
+    } catch (e) {
+      setCafesError('Failed to load cafes')
+    } finally {
+      setCafesLoading(false)
+    }
   }
 
   async function openUserDetail(id) {
@@ -69,16 +142,52 @@ export default function AdminDashboard() {
     setDetailLoading(false)
   }
 
+  async function openCafeDetail(cafe) {
+    setSelectedCafeId(cafe?.id ?? null)
+    setSelectedCafe(cafe || null)
+    setCafeMenu([])
+    setCafeDetailError('')
+    setCafeDetailLoading(true)
+    try {
+      const data = await listCafeMenu(cafe.id)
+      setCafeMenu(Array.isArray(data) ? data : [])
+    } catch (e) {
+      setCafeDetailError(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to load cafe menu')
+    } finally {
+      setCafeDetailLoading(false)
+    }
+  }
+
+  function closeCafeDetail() {
+    setSelectedCafeId(null)
+    setSelectedCafe(null)
+    setCafeMenu([])
+    setCafeDetailError('')
+    setCafeDetailLoading(false)
+  }
+
   useEffect(() => {
     let ignore = false
     ;(async () => {
       if (ignore) return
       await refresh()
+      await refreshCafes()
     })()
     return () => {
       ignore = true
     }
   }, [])
+
+  useEffect(() => {
+    if (section === 'cafes') {
+      refreshCafes()
+      refreshOwners()
+    }
+    if (section === 'owners') {
+      refreshOwners()
+    }
+  }, [section])
+  
 
   async function onApprove(id) {
     setActionBusyId(id)
@@ -118,6 +227,131 @@ export default function AdminDashboard() {
       setError(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to delete user')
     } finally {
       setActionBusyId(null)
+    }
+  }
+
+  async function onCreateOwner() {
+    setAddOwnerErr('')
+    setAddOwnerMsg('')
+
+    if (!ownerFirstName.trim() || !ownerLastName.trim() || !ownerEmail.trim() || !ownerPhone.trim()) {
+      setAddOwnerErr('Please fill all required owner fields.')
+      return
+    }
+    if (!ownerStreet.trim() || !ownerCity.trim() || !ownerState.trim() || !ownerPincode.trim()) {
+      setAddOwnerErr('Please fill the required address fields.')
+      return
+    }
+    if (!Array.isArray(ownerDocs) || ownerDocs.length === 0) {
+      setAddOwnerErr('Please upload at least 1 document.')
+      return
+    }
+
+    setAddOwnerBusy(true)
+    try {
+      const payload = {
+        role: 'OWNER',
+        personalDetails: {
+          firstName: ownerFirstName.trim(),
+          lastName: ownerLastName.trim(),
+          email: ownerEmail.trim(),
+          phone: ownerPhone.trim(),
+          contactNo: ownerContactNo.trim() || null,
+          gender: ownerGender.trim() || null,
+          maritalStatus: ownerMaritalStatus.trim() || null
+        },
+        address: {
+          street: ownerStreet.trim(),
+          city: ownerCity.trim(),
+          state: ownerState.trim(),
+          pincode: ownerPincode.trim()
+        },
+        academicInfoList: [],
+        workExperienceList: []
+      }
+
+      const msg = await createOwner(payload, ownerDocs)
+      setAddOwnerMsg(typeof msg === 'string' && msg ? msg : 'Owner created successfully.')
+      await refreshOwners()
+
+      setOwnerFirstName('')
+      setOwnerLastName('')
+      setOwnerEmail('')
+      setOwnerPhone('')
+      setOwnerContactNo('')
+      setOwnerGender('')
+      setOwnerMaritalStatus('')
+      setOwnerStreet('')
+      setOwnerCity('')
+      setOwnerState('')
+      setOwnerPincode('')
+      setOwnerDocs([])
+
+      setShowAddOwner(false)
+    } catch (e) {
+      setAddOwnerErr(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to create owner')
+    } finally {
+      setAddOwnerBusy(false)
+    }
+  }
+
+  async function onCreateCafe() {
+    setAddCafeErr('')
+    setAddCafeMsg('')
+
+    if (!selectedOwnerUsername) {
+      setAddCafeErr('Please select an owner.')
+      return
+    }
+    if (!cafeName.trim()) {
+      setAddCafeErr('Cafe name is required.')
+      return
+    }
+    if (!cafeCity.trim() || !cafeState.trim() || !cafePincode.trim()) {
+      setAddCafeErr('Please fill city, state, and pincode.')
+      return
+    }
+
+    setAddCafeBusy(true)
+    try {
+      const payload = {
+        cafeName: cafeName.trim(),
+        description: cafeDesc.trim() || null,
+        phone: cafePhone.trim() || null,
+        email: cafeEmail.trim() || null,
+        addressLine: cafeAddressLine.trim() || null,
+        city: cafeCity.trim(),
+        state: cafeState.trim(),
+        pincode: cafePincode.trim(),
+        openingTime: cafeOpeningTime || null,
+        closingTime: cafeClosingTime || null,
+        active: !!cafeActive
+      }
+
+      await createCafeForOwner(selectedOwnerUsername, payload)
+      setAddCafeMsg('Cafe created successfully.')
+      await refreshCafes()
+      await refreshOwners()
+
+      setCafeName('')
+      setCafeDesc('')
+      setCafePhone('')
+      setCafeEmail('')
+      setCafeAddressLine('')
+      setCafeCity('')
+      setCafeState('')
+      setCafePincode('')
+      setCafeOpeningTime('')
+      setCafeClosingTime('')
+      setCafeActive(true)
+      setOwnerSearch('')
+      setSelectedOwnerUsername('')
+
+      setShowAddCafe(false)
+    } catch (e) {
+      setAddCafeErr(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to create cafe')
+    } finally {
+      setAddCafeBusy(false)
     }
   }
 
@@ -265,10 +499,6 @@ export default function AdminDashboard() {
     }
   }, [])
 
-  const cafePlaceholderRows = useMemo(() => {
-    return []
-  }, [])
-
   const orderPlaceholderRows = useMemo(() => {
     return []
   }, [])
@@ -294,6 +524,7 @@ export default function AdminDashboard() {
 
   const menu = [
     { key: 'overview', label: SECTIONS.overview },
+    { key: 'owners', label: SECTIONS.owners },
     { key: 'cafes', label: SECTIONS.cafes },
     { key: 'users', label: SECTIONS.users },
     { key: 'orders', label: SECTIONS.orders },
@@ -376,7 +607,7 @@ export default function AdminDashboard() {
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <Card label="TOTAL CAFES REGISTERED" value={0} />
+          <Card label="TOTAL CAFES REGISTERED" value={cafes.length} />
           <Card label="TOTAL USERS" value={counts.total} />
           <Card label="PENDING APPROVALS" value={counts.pending} />
         </div>
@@ -432,6 +663,78 @@ export default function AdminDashboard() {
     )
   }
 
+  function OwnerManagementSection() {
+    return (
+      <>
+        <SectionTitle
+          breadcrumb="Dashboard / Cafe Owner Management"
+          title="Cafe Owner Management"
+          subtitle="Create and view cafe owners"
+        />
+
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white">
+          <div className="flex flex-col gap-3 border-b border-slate-200 p-5 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-sm font-semibold">Cafe owners</div>
+              <div className="mt-1 text-xs text-slate-500">List of all cafe owners on the platform</div>
+            </div>
+            <button
+              type="button"
+              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+              onClick={() => {
+                setShowAddOwner(true)
+                setAddOwnerErr('')
+                setAddOwnerMsg('')
+              }}
+            >
+              Add cafe owner
+            </button>
+          </div>
+
+          {ownersError ? <div className="px-5 py-3 text-sm text-red-700">{ownersError}</div> : null}
+          {ownersLoading ? <div className="px-5 py-3 text-sm text-slate-600">Loading owners...</div> : null}
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+                <tr>
+                  <th className="px-5 py-3">Owner</th>
+                  <th className="px-5 py-3">Email</th>
+                  <th className="px-5 py-3">Phone</th>
+                  <th className="px-5 py-3">Has cafe</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {ownersLoading ? (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-6 text-slate-500">
+                      Loading...
+                    </td>
+                  </tr>
+                ) : owners.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-6 text-slate-500">
+                      No owners yet.
+                    </td>
+                  </tr>
+                ) : (
+                  owners.map((o) => (
+                    <tr key={o.id} className="hover:bg-slate-50">
+                      <td className="px-5 py-3 font-semibold">{o.username}</td>
+                      <td className="px-5 py-3 text-slate-700">{o.email || '-'}</td>
+                      <td className="px-5 py-3 text-slate-700">{o.phone || '-'}</td>
+                      <td className="px-5 py-3 text-slate-700">{String(!!o.hasCafe)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>
+    )
+  }
+
   function CafeManagementSection() {
     return (
       <>
@@ -441,6 +744,10 @@ export default function AdminDashboard() {
           subtitle="Approve, reject, suspend, activate and review performance"
         />
 
+        {cafesError ? (
+          <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{cafesError}</div>
+        ) : null}
+
         <div className="mt-6 rounded-2xl border border-slate-200 bg-white">
           <div className="flex flex-col gap-3 border-b border-slate-200 p-5 md:flex-row md:items-center md:justify-between">
             <div>
@@ -448,6 +755,22 @@ export default function AdminDashboard() {
               <div className="mt-1 text-xs text-slate-500">View all cafes and manage registrations</div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+                onClick={() => {
+                  setShowAddCafe(true)
+                  setAddCafeErr('')
+                  setAddCafeMsg('')
+                  setOwnerSearch('')
+                  setSelectedOwnerUsername('')
+                  if (owners.length === 0) {
+                    refreshOwners()
+                  }
+                }}
+              >
+                Add cafe
+              </button>
               <button type="button" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm">
                 View all cafes
               </button>
@@ -473,13 +796,50 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {cafePlaceholderRows.length === 0 ? (
+                {cafesLoading ? (
                   <tr>
-                    <td className="px-5 py-6 text-slate-500" colSpan={6}>
+                    <td colSpan={6} className="px-5 py-6 text-slate-500">
+                      Loading...
+                    </td>
+                  </tr>
+                ) : cafes.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-5 py-6 text-slate-500">
                       No cafes available yet.
                     </td>
                   </tr>
-                ) : null}
+                ) : (
+                  cafes.map((cafe) => (
+                    <tr key={cafe.id} className="hover:bg-slate-50">
+                      <td className="px-5 py-3 font-semibold">{cafe.cafeName}</td>
+                      <td className="px-5 py-3">{cafe.ownerUsername}</td>
+                      <td className="px-5 py-3">
+                        {cafe.city}, {cafe.state}
+                      </td>
+                      <td className="px-5 py-3">
+                        <span
+                          className={
+                            cafe.active
+                              ? 'rounded-full bg-emerald-500/10 px-2 py-1 text-xs font-semibold text-emerald-700'
+                              : 'rounded-full bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-700'
+                          }
+                        >
+                          {cafe.active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">₹0</td>
+                      <td className="px-5 py-3">
+                        <button
+                          type="button"
+                          onClick={() => openCafeDetail(cafe)}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -918,6 +1278,7 @@ export default function AdminDashboard() {
 
           <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
             {section === 'overview' ? <OverviewSection /> : null}
+            {section === 'owners' ? <OwnerManagementSection /> : null}
             {section === 'cafes' ? <CafeManagementSection /> : null}
             {section === 'users' ? <UserManagementSection /> : null}
             {section === 'orders' ? <OrderMonitoringSection /> : null}
@@ -1032,6 +1393,198 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                 ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {selectedCafeId != null ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={closeCafeDetail}>
+              <div
+                className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-2xl bg-white p-6"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-xs text-slate-500">Cafe details</div>
+                    <div className="mt-1 text-xl font-extrabold text-slate-900">{selectedCafe?.cafeName || 'Cafe'}</div>
+                    <div className="mt-1 text-sm text-slate-600">
+                      {selectedCafe?.ownerUsername ? `Owner: ${selectedCafe.ownerUsername}` : ''}
+                      {selectedCafe?.city || selectedCafe?.state ? ` • ${selectedCafe.city || ''}${selectedCafe.city && selectedCafe.state ? ', ' : ''}${selectedCafe.state || ''}` : ''}
+                      {typeof selectedCafe?.active === 'boolean' ? ` • ${selectedCafe.active ? 'Active' : 'Inactive'}` : ''}
+                    </div>
+                  </div>
+                  <button type="button" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" onClick={closeCafeDetail}>
+                    Close
+                  </button>
+                </div>
+
+                {cafeDetailError ? (
+                  <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{cafeDetailError}</div>
+                ) : null}
+                {cafeDetailLoading ? <div className="mt-4 text-sm text-slate-600">Loading menu...</div> : null}
+
+                {!cafeDetailLoading ? (
+                  <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="text-sm font-semibold">Menu</div>
+                    {Array.isArray(cafeMenu) && cafeMenu.length > 0 ? (
+                      <div className="mt-3 overflow-x-auto">
+                        <table className="w-full min-w-[620px] text-left text-sm">
+                          <thead className="text-xs font-semibold uppercase text-slate-500">
+                            <tr>
+                              <th className="px-3 py-2">Item</th>
+                              <th className="px-3 py-2">Category</th>
+                              <th className="px-3 py-2">Price</th>
+                              <th className="px-3 py-2">Available</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200">
+                            {cafeMenu.map((mi) => (
+                              <tr key={mi.id} className="bg-white">
+                                <td className="px-3 py-2 font-semibold text-slate-900">
+                                  {mi.name || '-'}
+                                  {mi.description ? <div className="mt-1 text-xs font-normal text-slate-600">{mi.description}</div> : null}
+                                </td>
+                                <td className="px-3 py-2 text-slate-700">{mi.category || '-'}</td>
+                                <td className="px-3 py-2 text-slate-700">₹{mi.price ?? 0}</td>
+                                <td className="px-3 py-2 text-slate-700">{String(!!mi.available)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="mt-2 text-sm text-slate-600">No menu items found for this cafe.</div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {showAddOwner ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setShowAddOwner(false)}>
+              <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-2xl bg-white p-6" onMouseDown={(e) => e.stopPropagation()}>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-xs text-slate-500">Admin action</div>
+                    <div className="mt-1 text-xl font-extrabold text-slate-900">Add cafe owner</div>
+                    <div className="mt-1 text-sm text-slate-600">Creates an approved owner account and emails credentials.</div>
+                  </div>
+                  <button type="button" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" onClick={() => setShowAddOwner(false)}>
+                    Close
+                  </button>
+                </div>
+
+                {addOwnerErr ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{addOwnerErr}</div> : null}
+                {addOwnerMsg ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{addOwnerMsg}</div> : null}
+
+                <div className="mt-5 grid gap-4 md:grid-cols-2">
+                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="First name *" value={ownerFirstName} onChange={(e) => setOwnerFirstName(e.target.value)} />
+                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Last name *" value={ownerLastName} onChange={(e) => setOwnerLastName(e.target.value)} />
+                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Email *" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} />
+                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Phone *" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} />
+                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Contact no" value={ownerContactNo} onChange={(e) => setOwnerContactNo(e.target.value)} />
+                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Gender" value={ownerGender} onChange={(e) => setOwnerGender(e.target.value)} />
+                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Marital status" value={ownerMaritalStatus} onChange={(e) => setOwnerMaritalStatus(e.target.value)} />
+                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Street *" value={ownerStreet} onChange={(e) => setOwnerStreet(e.target.value)} />
+                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="City *" value={ownerCity} onChange={(e) => setOwnerCity(e.target.value)} />
+                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="State *" value={ownerState} onChange={(e) => setOwnerState(e.target.value)} />
+                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Pincode *" value={ownerPincode} onChange={(e) => setOwnerPincode(e.target.value)} />
+                </div>
+
+                <div className="mt-4">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Documents *</div>
+                  <input type="file" multiple className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" onChange={(e) => setOwnerDocs(Array.from(e.target.files || []))} />
+                </div>
+
+                <div className="mt-5 flex justify-end">
+                  <button
+                    type="button"
+                    className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                    disabled={addOwnerBusy}
+                    onClick={onCreateOwner}
+                  >
+                    {addOwnerBusy ? 'Creating...' : 'Create owner'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {showAddCafe ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setShowAddCafe(false)}>
+              <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-2xl bg-white p-6" onMouseDown={(e) => e.stopPropagation()}>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-xs text-slate-500">Admin action</div>
+                    <div className="mt-1 text-xl font-extrabold text-slate-900">Add cafe</div>
+                    <div className="mt-1 text-sm text-slate-600">Create a cafe and assign it to an owner.</div>
+                  </div>
+                  <button type="button" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" onClick={() => setShowAddCafe(false)}>
+                    Close
+                  </button>
+                </div>
+
+                {addCafeErr ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{addCafeErr}</div> : null}
+                {addCafeMsg ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{addCafeMsg}</div> : null}
+
+                <div className="mt-5 grid gap-4">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="text-sm font-semibold">Select owner *</div>
+                    <input
+                      className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                      placeholder="Search owner by username/email"
+                      value={ownerSearch}
+                      onChange={(e) => setOwnerSearch(e.target.value)}
+                    />
+                    <select
+                      className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                      value={selectedOwnerUsername}
+                      onChange={(e) => setSelectedOwnerUsername(e.target.value)}
+                    >
+                      <option value="">Select owner</option>
+                      {owners
+                        .filter((o) => {
+                          const q = ownerSearch.trim().toLowerCase()
+                          if (!q) return true
+                          return String(o.username || '').toLowerCase().includes(q) || String(o.email || '').toLowerCase().includes(q)
+                        })
+                        .map((o) => (
+                          <option key={o.id} value={o.username}>
+                            {o.username} {o.email ? `(${o.email})` : ''} {o.hasCafe ? '• has cafe' : ''}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Cafe name *" value={cafeName} onChange={(e) => setCafeName(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Phone" value={cafePhone} onChange={(e) => setCafePhone(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm md:col-span-2" placeholder="Description" value={cafeDesc} onChange={(e) => setCafeDesc(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Email" value={cafeEmail} onChange={(e) => setCafeEmail(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Address line" value={cafeAddressLine} onChange={(e) => setCafeAddressLine(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="City" value={cafeCity} onChange={(e) => setCafeCity(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="State" value={cafeState} onChange={(e) => setCafeState(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Pincode" value={cafePincode} onChange={(e) => setCafePincode(e.target.value)} />
+                    <input type="time" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" value={cafeOpeningTime} onChange={(e) => setCafeOpeningTime(e.target.value)} />
+                    <input type="time" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" value={cafeClosingTime} onChange={(e) => setCafeClosingTime(e.target.value)} />
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <input type="checkbox" checked={cafeActive} onChange={(e) => setCafeActive(e.target.checked)} />
+                      Active
+                    </label>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex justify-end">
+                  <button
+                    type="button"
+                    className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                    disabled={addCafeBusy}
+                    onClick={onCreateCafe}
+                  >
+                    {addCafeBusy ? 'Creating...' : 'Create cafe'}
+                  </button>
+                </div>
               </div>
             </div>
           ) : null}
