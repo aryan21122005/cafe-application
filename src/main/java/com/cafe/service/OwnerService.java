@@ -20,6 +20,8 @@ public interface OwnerService {
 
     ResponseEntity<CafeProfileResponse> upsertCafe(String ownerUsername, CafeProfileRequest request);
 
+    ResponseEntity<String> deleteCafe(String ownerUsername);
+
     ResponseEntity<List<OwnerStaffRow>> listStaff(String ownerUsername);
 
     ResponseEntity<String> createStaff(String ownerUsername, OwnerStaffCreateRequest request);

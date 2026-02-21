@@ -5,6 +5,7 @@ import {
   createOwnerStaff,
   createOwnerMenuItem,
   deleteOwnerCapacity,
+  deleteOwnerCafe,
   deleteOwnerStaff,
   deleteOwnerImage,
   deleteOwnerMenuItem,
@@ -13,6 +14,7 @@ import {
   listOwnerImages,
   listOwnerMenu,
   listOwnerStaff,
+  updateOwnerMenuItem,
   uploadOwnerImage,
   upsertOwnerCapacity,
   upsertOwnerCafe
@@ -35,7 +37,8 @@ function ProfileSection({
   cafeMsg,
   canSaveCafe,
   refreshCafe,
-  onSaveCafe
+  onSaveCafe,
+  onDeleteCafe
 }) {
   return (
     <div className="mt-6 rounded-2xl border border-black/10 bg-white/70 p-6">
@@ -53,6 +56,16 @@ function ProfileSection({
           >
             Reload
           </button>
+          {cafe?.id ? (
+            <button
+              type="button"
+              className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-500/15 disabled:opacity-60"
+              onClick={onDeleteCafe}
+              disabled={cafeLoading}
+            >
+              Delete cafe
+            </button>
+          ) : null}
           <button
             type="button"
             className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
@@ -189,6 +202,7 @@ function OnboardingSection({ cafe, setCafe, cafeLoading, cafeErr, cafeMsg, canSa
         canSaveCafe={canSaveCafe}
         refreshCafe={refreshCafe}
         onSaveCafe={onSaveCafe}
+        onDeleteCafe={() => {}}
       />
     </div>
   )
@@ -280,6 +294,29 @@ export default function OwnerDashboard() {
   const [newStaffDocuments, setNewStaffDocuments] = useState([])
 
   const ownerUsername = session?.username
+
+  async function onDeleteCafe() {
+    if (!window.confirm('Delete your cafe? This will remove menu items, images, and capacities.')) return
+    setCafeErr('')
+    setCafeMsg('')
+    setCafeLoading(true)
+    try {
+      await deleteOwnerCafe(ownerUsername)
+      setCafe(null)
+      setHasCafe(false)
+      setTab('profile')
+      setMenu([])
+      setCapacities([])
+      setImages([])
+      setStaff([])
+      setCafeMsg('Deleted')
+    } catch (e) {
+      const msg = e?.response?.data
+      setCafeErr(typeof msg === 'string' ? msg : 'Failed to delete cafe')
+    } finally {
+      setCafeLoading(false)
+    }
+  }
 
   async function refreshCafe() {
     setCafeErr('')
@@ -422,6 +459,25 @@ export default function OwnerDashboard() {
     } catch (e) {
       const msg = e?.response?.data
       setMenuErr(typeof msg === 'string' ? msg : 'Failed to delete menu item')
+    } finally {
+      setMenuLoading(false)
+    }
+  }
+
+  async function onToggleMenuAvailability(item) {
+    if (!item?.id) return
+    setMenuErr('')
+    setMenuMsg('')
+    setMenuLoading(true)
+    try {
+      await updateOwnerMenuItem(ownerUsername, item.id, {
+        available: !item.available
+      })
+      setMenuMsg('Updated')
+      await refreshMenu()
+    } catch (e) {
+      const msg = e?.response?.data
+      setMenuErr(typeof msg === 'string' ? msg : 'Failed to update availability')
     } finally {
       setMenuLoading(false)
     }
@@ -863,15 +919,31 @@ export default function OwnerDashboard() {
                       <td className="px-5 py-3 font-semibold text-slate-900">{m.name}</td>
                       <td className="px-5 py-3 text-slate-600">{m.category || '-'}</td>
                       <td className="px-5 py-3 text-slate-900">{m.price}</td>
-                      <td className="px-5 py-3 text-slate-600">{m.available ? 'Yes' : 'No'}</td>
                       <td className="px-5 py-3">
                         <button
                           type="button"
-                          className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/15"
-                          onClick={() => onDeleteMenuItem(m.id)}
+                          disabled={menuLoading}
+                          onClick={() => onToggleMenuAvailability(m)}
+                          className={
+                            m.available
+                              ? 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-500/15 disabled:opacity-60'
+                              : 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60'
+                          }
                         >
-                          Delete
+                          {m.available ? 'Available' : 'Unavailable'}
                         </button>
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/15"
+                            onClick={() => onDeleteMenuItem(m.id)}
+                            disabled={menuLoading}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -1518,6 +1590,7 @@ export default function OwnerDashboard() {
                 canSaveCafe={canSaveCafe}
                 refreshCafe={refreshCafe}
                 onSaveCafe={onSaveCafe}
+                onDeleteCafe={onDeleteCafe}
               />
             ) : null}
             {tab === 'staff' ? StaffSection() : null}

@@ -67,6 +67,11 @@ public class AdminController {
         return adminService.listCafeMenu(id);
     }
 
+    @DeleteMapping("/cafes/{id}")
+    public ResponseEntity<String> deleteCafe(@PathVariable Long id) {
+        return adminService.deleteCafe(id);
+    }
+
     @GetMapping("/users/{id}")
     public ResponseEntity<AdminUserDetail> getUserDetail(@PathVariable Long id) {
         return adminService.getUserDetail(id);

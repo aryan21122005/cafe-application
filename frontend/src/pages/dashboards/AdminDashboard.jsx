@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { clearSession, getSession } from '../../lib/auth.js'
-import { approveUser, createCafeForOwner, createOwner, denyUser, deleteUser, getUserDetail, listCafeMenu, listCafes, listOwners, listUsers } from '../../lib/api.js'
+import { approveUser, createCafeForOwner, createOwner, deleteCafeAdmin, denyUser, deleteUser, getUserDetail, listCafeMenu, listCafes, listOwners, listUsers } from '../../lib/api.js'
 
 const SECTIONS = {
   overview: 'Overview',
@@ -62,6 +62,20 @@ export default function AdminDashboard() {
   const [ownerState, setOwnerState] = useState('')
   const [ownerPincode, setOwnerPincode] = useState('')
   const [ownerDocs, setOwnerDocs] = useState([])
+  const [ownerAcademicList, setOwnerAcademicList] = useState([
+    { institutionName: '', degree: '', passingYear: '', grade: '', gradeInPercentage: '' }
+  ])
+  const [ownerWorkList, setOwnerWorkList] = useState([
+    {
+      startDate: '',
+      endDate: '',
+      currentlyWorking: false,
+      companyName: '',
+      designation: '',
+      ctc: '',
+      reasonForLeaving: ''
+    }
+  ])
 
   const [showAddCafe, setShowAddCafe] = useState(false)
   const [addCafeBusy, setAddCafeBusy] = useState(false)
@@ -230,6 +244,21 @@ export default function AdminDashboard() {
     }
   }
 
+  async function onDeleteCafe(id) {
+    if (!window.confirm('Delete this cafe? This will remove menu items, images, and capacities.')) return
+    setActionBusyId(`cafe:${id}`)
+    setCafesError('')
+    try {
+      await deleteCafeAdmin(id)
+      await refreshCafes()
+      await refreshOwners()
+    } catch (e) {
+      setCafesError(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to delete cafe')
+    } finally {
+      setActionBusyId(null)
+    }
+  }
+
   async function onCreateOwner() {
     setAddOwnerErr('')
     setAddOwnerMsg('')
@@ -249,6 +278,28 @@ export default function AdminDashboard() {
 
     setAddOwnerBusy(true)
     try {
+      const academicInfoList = (Array.isArray(ownerAcademicList) ? ownerAcademicList : [])
+        .map((a) => ({
+          institutionName: (a?.institutionName || '').trim(),
+          degree: (a?.degree || '').trim(),
+          passingYear: Number(a?.passingYear || 0),
+          grade: (a?.grade || '').trim(),
+          gradeInPercentage: Number(a?.gradeInPercentage || 0)
+        }))
+        .filter((a) => a.institutionName || a.degree || a.passingYear || a.grade || a.gradeInPercentage)
+
+      const workExperienceList = (Array.isArray(ownerWorkList) ? ownerWorkList : [])
+        .map((w) => ({
+          startDate: (w?.startDate || '').trim(),
+          endDate: (w?.endDate || '').trim(),
+          currentlyWorking: !!w?.currentlyWorking,
+          companyName: (w?.companyName || '').trim(),
+          designation: (w?.designation || '').trim(),
+          ctc: Number(w?.ctc || 0),
+          reasonForLeaving: (w?.reasonForLeaving || '').trim()
+        }))
+        .filter((w) => w.startDate || w.endDate || w.currentlyWorking || w.companyName || w.designation || w.ctc || w.reasonForLeaving)
+
       const payload = {
         role: 'OWNER',
         personalDetails: {
@@ -266,8 +317,8 @@ export default function AdminDashboard() {
           state: ownerState.trim(),
           pincode: ownerPincode.trim()
         },
-        academicInfoList: [],
-        workExperienceList: []
+        academicInfoList,
+        workExperienceList
       }
 
       const msg = await createOwner(payload, ownerDocs)
@@ -286,6 +337,18 @@ export default function AdminDashboard() {
       setOwnerState('')
       setOwnerPincode('')
       setOwnerDocs([])
+      setOwnerAcademicList([{ institutionName: '', degree: '', passingYear: '', grade: '', gradeInPercentage: '' }])
+      setOwnerWorkList([
+        {
+          startDate: '',
+          endDate: '',
+          currentlyWorking: false,
+          companyName: '',
+          designation: '',
+          ctc: '',
+          reasonForLeaving: ''
+        }
+      ])
 
       setShowAddOwner(false)
     } catch (e) {
@@ -829,13 +892,23 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-5 py-3">₹0</td>
                       <td className="px-5 py-3">
-                        <button
-                          type="button"
-                          onClick={() => openCafeDetail(cafe)}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
-                        >
-                          View
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openCafeDetail(cafe)}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            disabled={actionBusyId === `cafe:${cafe.id}`}
+                            onClick={() => onDeleteCafe(cafe.id)}
+                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 disabled:opacity-50"
+                          >
+                            {actionBusyId === `cafe:${cafe.id}` ? 'Deleting...' : 'Delete'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -1495,6 +1568,202 @@ export default function AdminDashboard() {
                 <div className="mt-4">
                   <div className="text-xs font-semibold uppercase text-slate-500">Documents *</div>
                   <input type="file" multiple className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" onChange={(e) => setOwnerDocs(Array.from(e.target.files || []))} />
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold">Academic qualification</div>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
+                      onClick={() =>
+                        setOwnerAcademicList((prev) => [
+                          ...(Array.isArray(prev) ? prev : []),
+                          { institutionName: '', degree: '', passingYear: '', grade: '', gradeInPercentage: '' }
+                        ])
+                      }
+                    >
+                      Add
+                    </button>
+                  </div>
+
+                  <div className="mt-4 grid gap-4">
+                    {(ownerAcademicList || []).map((row, idx) => (
+                      <div key={idx} className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs font-semibold uppercase text-slate-500">Entry {idx + 1}</div>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs disabled:opacity-50"
+                            disabled={(ownerAcademicList || []).length <= 1}
+                            onClick={() => setOwnerAcademicList((prev) => (prev || []).filter((_, i) => i !== idx))}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          <input
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                            placeholder="Institution name"
+                            value={row?.institutionName || ''}
+                            onChange={(e) =>
+                              setOwnerAcademicList((prev) =>
+                                (prev || []).map((r, i) => (i === idx ? { ...(r || {}), institutionName: e.target.value } : r))
+                              )
+                            }
+                          />
+                          <input
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                            placeholder="Degree"
+                            value={row?.degree || ''}
+                            onChange={(e) =>
+                              setOwnerAcademicList((prev) => (prev || []).map((r, i) => (i === idx ? { ...(r || {}), degree: e.target.value } : r)))
+                            }
+                          />
+                          <input
+                            type="number"
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                            placeholder="Passing year"
+                            value={row?.passingYear ?? ''}
+                            onChange={(e) =>
+                              setOwnerAcademicList((prev) =>
+                                (prev || []).map((r, i) => (i === idx ? { ...(r || {}), passingYear: e.target.value } : r))
+                              )
+                            }
+                          />
+                          <input
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                            placeholder="Grade"
+                            value={row?.grade || ''}
+                            onChange={(e) =>
+                              setOwnerAcademicList((prev) => (prev || []).map((r, i) => (i === idx ? { ...(r || {}), grade: e.target.value } : r)))
+                            }
+                          />
+                          <input
+                            type="number"
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm md:col-span-2"
+                            placeholder="Grade in percentage"
+                            value={row?.gradeInPercentage ?? ''}
+                            onChange={(e) =>
+                              setOwnerAcademicList((prev) =>
+                                (prev || []).map((r, i) => (i === idx ? { ...(r || {}), gradeInPercentage: e.target.value } : r))
+                              )
+                            }
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold">Work experience</div>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
+                      onClick={() =>
+                        setOwnerWorkList((prev) => [
+                          ...(Array.isArray(prev) ? prev : []),
+                          {
+                            startDate: '',
+                            endDate: '',
+                            currentlyWorking: false,
+                            companyName: '',
+                            designation: '',
+                            ctc: '',
+                            reasonForLeaving: ''
+                          }
+                        ])
+                      }
+                    >
+                      Add
+                    </button>
+                  </div>
+
+                  <div className="mt-4 grid gap-4">
+                    {(ownerWorkList || []).map((row, idx) => (
+                      <div key={idx} className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs font-semibold uppercase text-slate-500">Entry {idx + 1}</div>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs disabled:opacity-50"
+                            disabled={(ownerWorkList || []).length <= 1}
+                            onClick={() => setOwnerWorkList((prev) => (prev || []).filter((_, i) => i !== idx))}
+                          >
+                            Remove
+                          </button>
+                        </div>
+
+                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          <input
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                            placeholder="Company name"
+                            value={row?.companyName || ''}
+                            onChange={(e) =>
+                              setOwnerWorkList((prev) => (prev || []).map((r, i) => (i === idx ? { ...(r || {}), companyName: e.target.value } : r)))
+                            }
+                          />
+                          <input
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                            placeholder="Designation"
+                            value={row?.designation || ''}
+                            onChange={(e) =>
+                              setOwnerWorkList((prev) => (prev || []).map((r, i) => (i === idx ? { ...(r || {}), designation: e.target.value } : r)))
+                            }
+                          />
+                          <input
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                            placeholder="Start date"
+                            value={row?.startDate || ''}
+                            onChange={(e) =>
+                              setOwnerWorkList((prev) => (prev || []).map((r, i) => (i === idx ? { ...(r || {}), startDate: e.target.value } : r)))
+                            }
+                          />
+                          <input
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                            placeholder="End date"
+                            value={row?.endDate || ''}
+                            onChange={(e) =>
+                              setOwnerWorkList((prev) => (prev || []).map((r, i) => (i === idx ? { ...(r || {}), endDate: e.target.value } : r)))
+                            }
+                          />
+                          <label className="flex items-center gap-2 text-sm text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={!!row?.currentlyWorking}
+                              onChange={(e) =>
+                                setOwnerWorkList((prev) =>
+                                  (prev || []).map((r, i) => (i === idx ? { ...(r || {}), currentlyWorking: e.target.checked } : r))
+                                )
+                              }
+                            />
+                            Currently working
+                          </label>
+                          <input
+                            type="number"
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                            placeholder="CTC"
+                            value={row?.ctc ?? ''}
+                            onChange={(e) =>
+                              setOwnerWorkList((prev) => (prev || []).map((r, i) => (i === idx ? { ...(r || {}), ctc: e.target.value } : r)))
+                            }
+                          />
+                          <input
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm md:col-span-2"
+                            placeholder="Reason for leaving"
+                            value={row?.reasonForLeaving || ''}
+                            onChange={(e) =>
+                              setOwnerWorkList((prev) =>
+                                (prev || []).map((r, i) => (i === idx ? { ...(r || {}), reasonForLeaving: e.target.value } : r))
+                              )
+                            }
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="mt-5 flex justify-end">

@@ -11,7 +11,9 @@ import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.RegisterRequest;
 import com.cafe.entity.*;
 import com.cafe.repository.CafeRepository;
+import com.cafe.repository.CafeImageRepository;
 import com.cafe.repository.DocumentRepository;
+import com.cafe.repository.FunctionCapacityRepository;
 import com.cafe.repository.MenuItemRepository;
 import com.cafe.repository.UserRepository;
 import com.cafe.service.AdminService;
@@ -30,6 +32,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import org.springframework.web.multipart.MultipartFile;
 
@@ -49,6 +53,12 @@ public class AdminServiceImpl implements AdminService {
 
     @Autowired
     private MenuItemRepository menuItemRepository;
+
+    @Autowired
+    private FunctionCapacityRepository functionCapacityRepository;
+
+    @Autowired
+    private CafeImageRepository cafeImageRepository;
 
     @Autowired
     private BCryptPasswordEncoder passwordEncoder;
@@ -89,6 +99,57 @@ public class AdminServiceImpl implements AdminService {
             return ResponseEntity.ok(rows);
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<String> deleteCafe(Long cafeId) {
+        try {
+            if (cafeId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Cafe id is required");
+            }
+
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Cafe not found");
+            }
+
+            if (cafe.getStaff() != null) {
+                cafe.getStaff().clear();
+                cafeRepository.save(cafe);
+            }
+
+            try {
+                List<CafeImage> imgs = cafeImageRepository.findByCafeId(cafeId);
+                for (CafeImage img : imgs) {
+                    if (img == null) continue;
+                    try {
+                        if (img.getFilePath() != null && !img.getFilePath().isBlank()) {
+                            Files.deleteIfExists(Path.of(img.getFilePath()));
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+                cafeImageRepository.deleteAll(imgs);
+            } catch (RuntimeException ignored) {
+            }
+
+            try {
+                List<FunctionCapacity> caps = functionCapacityRepository.findByCafeId(cafeId);
+                functionCapacityRepository.deleteAll(caps);
+            } catch (RuntimeException ignored) {
+            }
+
+            try {
+                List<MenuItem> items = menuItemRepository.findByCafeId(cafeId);
+                menuItemRepository.deleteAll(items);
+            } catch (RuntimeException ignored) {
+            }
+
+            cafeRepository.deleteById(cafeId);
+            return ResponseEntity.ok("Deleted");
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to delete cafe");
         }
     }
 

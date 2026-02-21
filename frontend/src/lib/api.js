@@ -61,6 +61,11 @@ export async function createCafeForOwner(ownerUsername, payload) {
   return res.data
 }
 
+export async function deleteCafeAdmin(id) {
+  const res = await api.delete(`/api/admin/cafes/${id}`)
+  return res.data
+}
+
 export async function listCafeMenu(cafeId) {
   const res = await api.get(`/api/admin/cafes/${cafeId}/menu`)
   return res.data
@@ -102,6 +107,15 @@ export async function getOwnerCafe(username) {
 
 export async function upsertOwnerCafe(username, payload) {
   const res = await api.put('/api/owner/cafe', payload, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function deleteOwnerCafe(username) {
+  const res = await api.delete('/api/owner/cafe', {
     headers: {
       'X-USERNAME': username
     }

@@ -27,6 +27,8 @@ public interface AdminService {
 
     ResponseEntity<List<MenuItemRow>> listCafeMenu(Long cafeId);
 
+    ResponseEntity<String> deleteCafe(Long cafeId);
+
     ResponseEntity<AdminUserDetail> getUserDetail(Long id);
 
     ResponseEntity<String> approveUser(Long id);

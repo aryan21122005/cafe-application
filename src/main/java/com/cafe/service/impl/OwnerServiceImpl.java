@@ -205,6 +205,57 @@ public class OwnerServiceImpl implements OwnerService {
     }
 
     @Override
+    public ResponseEntity<String> deleteCafe(String ownerUsername) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not an owner");
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Cafe not found");
+            }
+
+            Long cafeId = cafe.getId();
+
+            if (cafe.getStaff() != null) {
+                cafe.getStaff().clear();
+                cafeRepository.save(cafe);
+            }
+
+            try {
+                List<CafeImage> imgs = cafeImageRepository.findByCafeId(cafeId);
+                for (CafeImage img : imgs) {
+                    if (img == null) continue;
+                    try {
+                        Files.deleteIfExists(Path.of(img.getFilePath()));
+                    } catch (Exception ignored) {
+                    }
+                }
+                cafeImageRepository.deleteAll(imgs);
+            } catch (RuntimeException ignored) {
+            }
+
+            try {
+                List<FunctionCapacity> caps = functionCapacityRepository.findByCafeId(cafeId);
+                functionCapacityRepository.deleteAll(caps);
+            } catch (RuntimeException ignored) {
+            }
+
+            try {
+                List<MenuItem> items = menuItemRepository.findByCafeId(cafeId);
+                menuItemRepository.deleteAll(items);
+            } catch (RuntimeException ignored) {
+            }
+
+            cafeRepository.deleteById(cafeId);
+            return ResponseEntity.ok("Deleted");
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to delete cafe");
+        }
+    }
+
+    @Override
     public ResponseEntity<List<OwnerStaffRow>> listStaff(String ownerUsername) {
         try {
             User owner = requireOwner(ownerUsername);

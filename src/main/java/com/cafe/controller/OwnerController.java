@@ -40,6 +40,13 @@ public class OwnerController {
         return ownerService.upsertCafe(ownerUsername, request);
     }
 
+    @DeleteMapping("/cafe")
+    public ResponseEntity<String> deleteCafe(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername
+    ) {
+        return ownerService.deleteCafe(ownerUsername);
+    }
+
     @GetMapping("/staff")
     public ResponseEntity<List<OwnerStaffRow>> listStaff(
             @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername
