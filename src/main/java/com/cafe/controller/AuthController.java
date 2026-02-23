@@ -37,11 +37,11 @@ public class AuthController {
         return authApiService.registerWithDocuments(request, documents);
     }
 
-    // ---------- TEST ----------
-    @GetMapping("/register")
-    public ResponseEntity<String> test() {
-        return ResponseEntity.ok("Auth API working");
-    }
+    // // ---------- TEST ----------
+    // @GetMapping("/register")
+    // public ResponseEntity<String> test() {
+    //     return ResponseEntity.ok("Auth API working");
+    // }
 
     // ---------- LOGIN ----------
     @PostMapping("/login")
