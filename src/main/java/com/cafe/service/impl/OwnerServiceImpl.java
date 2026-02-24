@@ -40,12 +40,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
 @Service
 public class OwnerServiceImpl implements OwnerService {
@@ -75,6 +75,9 @@ public class OwnerServiceImpl implements OwnerService {
 
     @Value("${cafe.images.dir:uploads/cafe-images}")
     private String cafeImagesDir;
+
+    @Value("${cafe.menu.images.dir:uploads/menu-images}")
+    private String menuImagesDir;
 
     private String generateTempPassword() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 10);
@@ -125,6 +128,9 @@ public class OwnerServiceImpl implements OwnerService {
         r.setPrice(m.getPrice());
         r.setAvailable(m.getAvailable());
         r.setCategory(m.getCategory());
+        if (m.getImageFilePath() != null && !m.getImageFilePath().isBlank()) {
+            r.setImageUrl("/api/public/menu-images/" + m.getId());
+        }
         return r;
     }
 
@@ -244,6 +250,15 @@ public class OwnerServiceImpl implements OwnerService {
 
             try {
                 List<MenuItem> items = menuItemRepository.findByCafeId(cafeId);
+                for (MenuItem mi : items) {
+                    if (mi == null) continue;
+                    try {
+                        if (mi.getImageFilePath() != null && !mi.getImageFilePath().isBlank()) {
+                            Files.deleteIfExists(Path.of(mi.getImageFilePath()));
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
                 menuItemRepository.deleteAll(items);
             } catch (RuntimeException ignored) {
             }
@@ -588,6 +603,56 @@ public class OwnerServiceImpl implements OwnerService {
     }
 
     @Override
+    public ResponseEntity<MenuItemRow> uploadMenuItemImage(String ownerUsername, Long id, MultipartFile file) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (id == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (file == null || file.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            MenuItem m = menuItemRepository.findById(id).orElse(null);
+            if (m == null || m.getCafe() == null || !m.getCafe().getId().equals(cafe.getId())) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            try {
+                if (m.getImageFilePath() != null && !m.getImageFilePath().isBlank()) {
+                    Files.deleteIfExists(Path.of(m.getImageFilePath()));
+                }
+            } catch (Exception ignored) {
+            }
+
+            Files.createDirectories(Path.of(menuImagesDir));
+
+            String orig = file.getOriginalFilename() == null ? "image" : file.getOriginalFilename();
+            String safe = orig.replaceAll("[^a-zA-Z0-9._-]", "_");
+            String storedName = UUID.randomUUID() + "_" + safe;
+            Path target = Path.of(menuImagesDir).resolve(storedName);
+            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+
+            m.setImageFilename(orig);
+            m.setImageContentType(file.getContentType() == null ? "application/octet-stream" : file.getContentType());
+            m.setImageFilePath(target.toAbsolutePath().toString());
+            m.setImageSize(file.getSize());
+            menuItemRepository.save(m);
+
+            return ResponseEntity.ok(toMenuRow(m));
+        } catch (Exception ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
     public ResponseEntity<String> deleteMenuItem(String ownerUsername, Long id) {
         try {
             User owner = requireOwner(ownerUsername);
@@ -602,6 +667,14 @@ public class OwnerServiceImpl implements OwnerService {
             if (m == null || m.getCafe() == null || !m.getCafe().getId().equals(cafe.getId())) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Not found");
             }
+
+            try {
+                if (m.getImageFilePath() != null && !m.getImageFilePath().isBlank()) {
+                    Files.deleteIfExists(Path.of(m.getImageFilePath()));
+                }
+            } catch (Exception ignored) {
+            }
+
             menuItemRepository.deleteById(id);
             return ResponseEntity.ok("Deleted");
         } catch (RuntimeException ex) {

@@ -36,6 +36,8 @@ public interface OwnerService {
 
     ResponseEntity<MenuItemRow> updateMenuItem(String ownerUsername, Long id, MenuItemRequest request);
 
+    ResponseEntity<MenuItemRow> uploadMenuItemImage(String ownerUsername, Long id, MultipartFile file);
+
     ResponseEntity<String> deleteMenuItem(String ownerUsername, Long id);
 
     ResponseEntity<List<FunctionCapacityRow>> listCapacities(String ownerUsername);

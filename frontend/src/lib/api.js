@@ -193,6 +193,18 @@ export async function updateOwnerMenuItem(username, id, payload) {
   return res.data
 }
 
+export async function uploadOwnerMenuItemImage(username, id, file) {
+  const fd = new FormData()
+  fd.append('file', file)
+
+  const res = await api.post(`/api/owner/menu/${id}/image`, fd, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
 export async function deleteOwnerMenuItem(username, id) {
   const res = await api.delete(`/api/owner/menu/${id}`, {
     headers: {
@@ -247,8 +259,7 @@ export async function uploadOwnerImage(username, file, cover) {
 
   const res = await api.post('/api/owner/images', fd, {
     headers: {
-      'X-USERNAME': username,
-      'Content-Type': 'multipart/form-data'
+      'X-USERNAME': username
     }
   })
   return res.data

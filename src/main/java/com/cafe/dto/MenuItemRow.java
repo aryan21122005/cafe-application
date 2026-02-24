@@ -13,4 +13,6 @@ public class MenuItemRow {
     private Double price;
     private Boolean available;
     private String category;
+
+    private String imageUrl;
 }

@@ -103,6 +103,15 @@ public class OwnerController {
         return ownerService.updateMenuItem(ownerUsername, id, request);
     }
 
+    @PostMapping(value = "/menu/{id}/image", consumes = {"multipart/form-data"})
+    public ResponseEntity<MenuItemRow> uploadMenuItemImage(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
+            @PathVariable Long id,
+            @RequestPart("file") MultipartFile file
+    ) {
+        return ownerService.uploadMenuItemImage(ownerUsername, id, file);
+    }
+
     @DeleteMapping("/menu/{id}")
     public ResponseEntity<String> deleteMenuItem(
             @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,

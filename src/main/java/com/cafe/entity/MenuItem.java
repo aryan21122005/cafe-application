@@ -32,4 +32,12 @@ public class MenuItem {
     private Boolean available = true;
 
     private String category;
+
+    private String imageFilename;
+
+    private String imageContentType;
+
+    private String imageFilePath;
+
+    private Long imageSize;
 }

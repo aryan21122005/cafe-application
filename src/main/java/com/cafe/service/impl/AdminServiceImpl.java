@@ -142,6 +142,15 @@ public class AdminServiceImpl implements AdminService {
 
             try {
                 List<MenuItem> items = menuItemRepository.findByCafeId(cafeId);
+                for (MenuItem mi : items) {
+                    if (mi == null) continue;
+                    try {
+                        if (mi.getImageFilePath() != null && !mi.getImageFilePath().isBlank()) {
+                            Files.deleteIfExists(Path.of(mi.getImageFilePath()));
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
                 menuItemRepository.deleteAll(items);
             } catch (RuntimeException ignored) {
             }
@@ -350,6 +359,9 @@ public class AdminServiceImpl implements AdminService {
                 r.setPrice(mi.getPrice());
                 r.setAvailable(mi.getAvailable());
                 r.setCategory(mi.getCategory());
+                if (mi.getImageFilePath() != null && !mi.getImageFilePath().isBlank()) {
+                    r.setImageUrl("/api/public/menu-images/" + mi.getId());
+                }
                 return r;
             }).toList();
             return ResponseEntity.ok(rows);

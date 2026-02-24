@@ -1276,7 +1276,7 @@ export default function AdminDashboard() {
             </div>
           </header>
 
-          <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
+          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-6">
             {section === 'overview' ? <OverviewSection /> : null}
             {section === 'owners' ? <OwnerManagementSection /> : null}
             {section === 'cafes' ? <CafeManagementSection /> : null}

@@ -14,6 +14,7 @@ import {
   listOwnerImages,
   listOwnerMenu,
   listOwnerStaff,
+  uploadOwnerMenuItemImage,
   updateOwnerMenuItem,
   uploadOwnerImage,
   upsertOwnerCapacity,
@@ -235,6 +236,7 @@ export default function OwnerDashboard() {
   const [newMenuCategory, setNewMenuCategory] = useState('')
   const [newMenuDescription, setNewMenuDescription] = useState('')
   const [newMenuAvailable, setNewMenuAvailable] = useState(true)
+  const [newMenuImageFile, setNewMenuImageFile] = useState(null)
 
   const [capacities, setCapacities] = useState([])
   const [capLoading, setCapLoading] = useState(false)
@@ -425,23 +427,51 @@ export default function OwnerDashboard() {
     }
     setMenuLoading(true)
     try {
-      await createOwnerMenuItem(ownerUsername, {
+      const created = await createOwnerMenuItem(ownerUsername, {
         name,
         price: priceNum,
         category: newMenuCategory.trim() || null,
         description: newMenuDescription.trim() || null,
         available: !!newMenuAvailable
       })
+
+      let imageFailed = false
+      if (newMenuImageFile && created?.id) {
+        try {
+          await uploadOwnerMenuItemImage(ownerUsername, created.id, newMenuImageFile)
+        } catch (e) {
+          imageFailed = true
+        }
+      }
+
       setNewMenuName('')
       setNewMenuPrice('')
       setNewMenuCategory('')
       setNewMenuDescription('')
       setNewMenuAvailable(true)
-      setMenuMsg('Added')
+      setNewMenuImageFile(null)
+      setMenuMsg(imageFailed ? 'Added (image upload failed)' : 'Added')
       await refreshMenu()
     } catch (e) {
       const msg = e?.response?.data
       setMenuErr(typeof msg === 'string' ? msg : 'Failed to add menu item')
+    } finally {
+      setMenuLoading(false)
+    }
+  }
+
+  async function onUploadMenuImage(item, file) {
+    if (!item?.id || !file) return
+    setMenuErr('')
+    setMenuMsg('')
+    setMenuLoading(true)
+    try {
+      await uploadOwnerMenuItemImage(ownerUsername, item.id, file)
+      setMenuMsg('Image uploaded')
+      await refreshMenu()
+    } catch (e) {
+      const msg = e?.response?.data
+      setMenuErr(typeof msg === 'string' ? msg : 'Failed to upload image')
     } finally {
       setMenuLoading(false)
     }
@@ -811,6 +841,41 @@ export default function OwnerDashboard() {
     )
   }
 
+  const sidebarItems = useMemo(() => {
+    const disabled = !hasCafe
+    return [
+      { key: 'profile', label: hasCafe ? 'Cafe Profile' : 'Register Cafe', disabled: false },
+      { key: 'staff', label: 'Staff', disabled },
+      { key: 'menu', label: 'Menu', disabled },
+      { key: 'capacities', label: 'Tables/Functions', disabled },
+      { key: 'images', label: 'Images', disabled },
+      { key: 'bookings', label: 'Bookings', disabled },
+      { key: 'orders', label: 'Orders', disabled }
+    ]
+  }, [hasCafe])
+
+  function SidebarButton({ item }) {
+    const active = tab === item.key
+    return (
+      <button
+        type="button"
+        disabled={!!item.disabled}
+        onClick={() => {
+          if (!item.disabled) setTab(item.key)
+        }}
+        className={
+          item.disabled
+            ? 'rounded-lg px-3 py-2 text-left text-sm text-slate-400 opacity-60'
+            : active
+              ? 'rounded-lg bg-emerald-600/15 px-3 py-2 text-left text-sm font-semibold text-emerald-800'
+              : 'rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-white'
+        }
+      >
+        {item.label}
+      </button>
+    )
+  }
+
   function MenuSection() {
     return (
       <div className="mt-6 grid gap-4">
@@ -887,6 +952,16 @@ export default function OwnerDashboard() {
                 />
               </Field>
             </div>
+            <div className="md:col-span-5">
+              <Field label="Image (optional)">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                  onChange={(e) => setNewMenuImageFile(e.target.files?.[0] || null)}
+                />
+              </Field>
+            </div>
           </div>
         </div>
 
@@ -896,9 +971,10 @@ export default function OwnerDashboard() {
             <div className="mt-1 text-xs text-slate-600">Current menu items.</div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-sm">
+            <table className="w-full min-w-[1100px] text-left text-sm">
               <thead className="bg-white/70 text-xs font-semibold uppercase text-slate-500">
                 <tr>
+                  <th className="px-5 py-3">Image</th>
                   <th className="px-5 py-3">Name</th>
                   <th className="px-5 py-3">Category</th>
                   <th className="px-5 py-3">Price</th>
@@ -909,14 +985,31 @@ export default function OwnerDashboard() {
               <tbody className="divide-y divide-black/5">
                 {menu.length === 0 ? (
                   <tr>
-                    <td className="px-5 py-6 text-slate-600" colSpan={5}>
+                    <td className="px-5 py-6 text-slate-600" colSpan={6}>
                       No items yet.
                     </td>
                   </tr>
                 ) : (
                   menu.map((m) => (
                     <tr key={m.id} className="hover:bg-black/5">
-                      <td className="px-5 py-3 font-semibold text-slate-900">{m.name}</td>
+                      <td className="px-5 py-3">
+                        {m.imageUrl ? (
+                          <a href={m.imageUrl} target="_blank" rel="noreferrer">
+                            <img src={m.imageUrl} alt={m.name} className="h-10 w-10 rounded-lg object-cover" />
+                          </a>
+                        ) : (
+                          <div className="h-10 w-10 rounded-lg border border-black/10 bg-white" />
+                        )}
+                      </td>
+                      <td className="px-5 py-3 font-semibold text-slate-900">
+                        {m.imageUrl ? (
+                          <a href={m.imageUrl} target="_blank" rel="noreferrer" className="hover:underline">
+                            {m.name}
+                          </a>
+                        ) : (
+                          m.name
+                        )}
+                      </td>
                       <td className="px-5 py-3 text-slate-600">{m.category || '-'}</td>
                       <td className="px-5 py-3 text-slate-900">{m.price}</td>
                       <td className="px-5 py-3">
@@ -935,6 +1028,20 @@ export default function OwnerDashboard() {
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex flex-wrap items-center gap-2">
+                          <label className="rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white">
+                            Upload image
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              disabled={menuLoading}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0] || null
+                                e.target.value = ''
+                                if (f) onUploadMenuImage(m, f)
+                              }}
+                            />
+                          </label>
                           <button
                             type="button"
                             className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/15"
@@ -1547,8 +1654,8 @@ export default function OwnerDashboard() {
 
   return (
     <div className="min-h-screen bg-[#EDE4DA] text-slate-900">
-      <div className="mx-auto max-w-5xl px-6 py-10">
-        <div className="flex items-center justify-between">
+      <div className="w-full px-4 py-6 md:px-6">
+        <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-xs text-slate-500">Cafe Owner Dashboard</div>
             <h1 className="mt-1 text-3xl font-extrabold">Welcome, {session?.username || 'Owner'}</h1>
@@ -1568,62 +1675,60 @@ export default function OwnerDashboard() {
           </div>
         </div>
 
-        {hasCafe ? (
-          <>
-            <div className="mt-8 flex flex-wrap gap-2">
-              <TabButton k="profile" label="Cafe Profile" />
-              <TabButton k="staff" label="Staff" />
-              <TabButton k="menu" label="Menu" />
-              <TabButton k="capacities" label="Tables/Functions" />
-              <TabButton k="images" label="Images" />
-              <TabButton k="bookings" label="Bookings" />
-              <TabButton k="orders" label="Orders" />
+        <div className="mt-5 grid gap-4 lg:grid-cols-[260px_1fr]">
+          <aside className="h-fit rounded-2xl border border-black/10 bg-white/70 p-4">
+            <div className="text-xs font-semibold uppercase text-slate-500">Navigation</div>
+            <div className="mt-3 grid gap-1">
+              {sidebarItems.map((item) => (
+                <SidebarButton key={item.key} item={item} />
+              ))}
             </div>
-
-            {tab === 'profile' ? (
-              <ProfileSection
-                cafe={cafe}
-                setCafe={setCafe}
-                cafeLoading={cafeLoading}
-                cafeErr={cafeErr}
-                cafeMsg={cafeMsg}
-                canSaveCafe={canSaveCafe}
-                refreshCafe={refreshCafe}
-                onSaveCafe={onSaveCafe}
-                onDeleteCafe={onDeleteCafe}
-              />
+            {!hasCafe ? (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-900">
+                Create your cafe profile first to unlock Staff, Menu, Tables/Functions, Images, Bookings and Orders.
+              </div>
             ) : null}
-            {tab === 'staff' ? StaffSection() : null}
-            {tab === 'menu' ? MenuSection() : null}
-            {tab === 'capacities' ? CapacitiesSection() : null}
-            {tab === 'images' ? ImagesSection() : null}
-            {tab === 'bookings' ? PlaceholderSection({ title: 'Bookings', subtitle: 'View upcoming and past bookings.' }) : null}
-            {tab === 'orders' ? PlaceholderSection({ title: 'Orders', subtitle: 'Track dine-in and takeaway orders.' }) : null}
-          </>
-        ) : (
-          <>
-            <div className="mt-8 flex flex-wrap gap-2">
-              <TabButton k="profile" label="Register Cafe" />
-              <TabButton k="staff" label="Staff" disabled />
-              <TabButton k="menu" label="Menu" disabled />
-              <TabButton k="capacities" label="Tables/Functions" disabled />
-              <TabButton k="images" label="Images" disabled />
-              <TabButton k="bookings" label="Bookings" disabled />
-              <TabButton k="orders" label="Orders" disabled />
-            </div>
+          </aside>
 
-            <OnboardingSection
-              cafe={cafe}
-              setCafe={setCafe}
-              cafeLoading={cafeLoading}
-              cafeErr={cafeErr}
-              cafeMsg={cafeMsg}
-              canSaveCafe={canSaveCafe}
-              refreshCafe={refreshCafe}
-              onSaveCafe={onSaveCafe}
-            />
-          </>
-        )}
+          <main>
+            {hasCafe ? (
+              <>
+                {tab === 'profile' ? (
+                  <ProfileSection
+                    cafe={cafe}
+                    setCafe={setCafe}
+                    cafeLoading={cafeLoading}
+                    cafeErr={cafeErr}
+                    cafeMsg={cafeMsg}
+                    canSaveCafe={canSaveCafe}
+                    refreshCafe={refreshCafe}
+                    onSaveCafe={onSaveCafe}
+                    onDeleteCafe={onDeleteCafe}
+                  />
+                ) : null}
+                {tab === 'staff' ? StaffSection() : null}
+                {tab === 'menu' ? MenuSection() : null}
+                {tab === 'capacities' ? CapacitiesSection() : null}
+                {tab === 'images' ? ImagesSection() : null}
+                {tab === 'bookings' ? PlaceholderSection({ title: 'Bookings', subtitle: 'View upcoming and past bookings.' }) : null}
+                {tab === 'orders' ? PlaceholderSection({ title: 'Orders', subtitle: 'Track dine-in and takeaway orders.' }) : null}
+              </>
+            ) : (
+              <>
+                <OnboardingSection
+                  cafe={cafe}
+                  setCafe={setCafe}
+                  cafeLoading={cafeLoading}
+                  cafeErr={cafeErr}
+                  cafeMsg={cafeMsg}
+                  canSaveCafe={canSaveCafe}
+                  refreshCafe={refreshCafe}
+                  onSaveCafe={onSaveCafe}
+                />
+              </>
+            )}
+          </main>
+        </div>
       </div>
     </div>
   )
