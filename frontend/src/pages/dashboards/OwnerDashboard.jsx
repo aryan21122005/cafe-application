@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { clearSession, getSession } from '../../lib/auth.js'
 import {
   createOwnerStaff,
@@ -258,6 +257,8 @@ export default function OwnerDashboard() {
   const [uploadCover, setUploadCover] = useState(false)
 
   const [newStaffRole, setNewStaffRole] = useState('WAITER')
+  const newStaffSteps = ['Personal details', 'Address', 'Academic info', 'Work experience', 'Documents']
+  const [newStaffStep, setNewStaffStep] = useState(0)
   const [newStaffFirstName, setNewStaffFirstName] = useState('')
   const [newStaffLastName, setNewStaffLastName] = useState('')
   const [newStaffEmail, setNewStaffEmail] = useState('')
@@ -338,6 +339,40 @@ export default function OwnerDashboard() {
       const msg = e?.response?.data
       setCafeErr(typeof msg === 'string' ? msg : 'Failed to load cafe profile')
       return false
+    } finally {
+      setCafeLoading(false)
+    }
+  }
+
+  async function onSaveCafe() {
+    setCafeErr('')
+    setCafeMsg('')
+
+    if (!canSaveCafe) {
+      setCafeErr('Cafe name is required')
+      return
+    }
+
+    setCafeLoading(true)
+    try {
+      await upsertOwnerCafe(ownerUsername, {
+        cafeName: String(cafe?.cafeName || '').trim(),
+        description: String(cafe?.description || '').trim() || null,
+        phone: String(cafe?.phone || '').trim() || null,
+        email: String(cafe?.email || '').trim() || null,
+        addressLine: String(cafe?.addressLine || '').trim() || null,
+        city: String(cafe?.city || '').trim() || null,
+        state: String(cafe?.state || '').trim() || null,
+        pincode: String(cafe?.pincode || '').trim() || null,
+        openingTime: String(cafe?.openingTime || '').trim() || null,
+        closingTime: String(cafe?.closingTime || '').trim() || null,
+        active: cafe?.active ?? true
+      })
+      setCafeMsg('Saved')
+      await refreshCafe()
+    } catch (e) {
+      const msg = e?.response?.data
+      setCafeErr(typeof msg === 'string' ? msg : 'Failed to save cafe')
     } finally {
       setCafeLoading(false)
     }
@@ -620,7 +655,9 @@ export default function OwnerDashboard() {
       String(newStaffStreet || '').trim().length > 0 &&
       String(newStaffCity || '').trim().length > 0 &&
       String(newStaffState || '').trim().length > 0 &&
-      String(newStaffPincode || '').trim().length > 0
+      String(newStaffPincode || '').trim().length > 0 &&
+      Array.isArray(newStaffDocuments) &&
+      newStaffDocuments.length > 0
     )
   }, [
     newStaffRole,
@@ -631,7 +668,44 @@ export default function OwnerDashboard() {
     newStaffStreet,
     newStaffCity,
     newStaffState,
-    newStaffPincode
+    newStaffPincode,
+    newStaffDocuments
+  ])
+
+  const canGoNextStaff = useMemo(() => {
+    if (newStaffStep === 0) {
+      return (
+        String(newStaffRole || '').trim().length > 0 &&
+        String(newStaffFirstName || '').trim().length > 0 &&
+        String(newStaffLastName || '').trim().length > 0 &&
+        String(newStaffEmail || '').trim().length > 0
+      )
+    }
+    if (newStaffStep === 1) {
+      return (
+        String(newStaffStreet || '').trim().length > 0 &&
+        String(newStaffCity || '').trim().length > 0 &&
+        String(newStaffState || '').trim().length > 0 &&
+        String(newStaffPincode || '').trim().length > 0
+      )
+    }
+    if (newStaffStep === 2) return true
+    if (newStaffStep === 3) return true
+    if (newStaffStep === 4) {
+      return Array.isArray(newStaffDocuments) && newStaffDocuments.length > 0
+    }
+    return false
+  }, [
+    newStaffStep,
+    newStaffRole,
+    newStaffFirstName,
+    newStaffLastName,
+    newStaffEmail,
+    newStaffStreet,
+    newStaffCity,
+    newStaffState,
+    newStaffPincode,
+    newStaffDocuments
   ])
 
   function updateStaffAcademic(idx, key, value) {
@@ -646,7 +720,7 @@ export default function OwnerDashboard() {
   }
 
   function removeStaffAcademic(idx) {
-    setNewStaffAcademicInfoList((prev) => prev.filter((_, i) => i !== idx))
+    setNewStaffAcademicInfoList((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)))
   }
 
   function updateStaffWork(idx, key, value) {
@@ -669,58 +743,23 @@ export default function OwnerDashboard() {
   }
 
   function removeStaffWork(idx) {
-    setNewStaffWorkExperienceList((prev) => prev.filter((_, i) => i !== idx))
-  }
-
-  async function onSaveCafe() {
-    setCafeErr('')
-    setCafeMsg('')
-    if (!canSaveCafe) {
-      setCafeErr('Cafe name is required')
-      return
-    }
-    setCafeLoading(true)
-    try {
-      const payload = {
-        cafeName: String(cafe.cafeName || '').trim(),
-        description: cafe.description || '',
-        phone: cafe.phone || '',
-        email: cafe.email || '',
-        addressLine: cafe.addressLine || '',
-        city: cafe.city || '',
-        state: cafe.state || '',
-        pincode: cafe.pincode || '',
-        openingTime: cafe.openingTime || '',
-        closingTime: cafe.closingTime || '',
-        active: cafe.active != null ? !!cafe.active : true
-      }
-      const res = await upsertOwnerCafe(ownerUsername, payload)
-      setCafe(res)
-      setHasCafe(true)
-      setCafeMsg('Saved')
-      await refreshStaff()
-      await refreshMenu()
-      await refreshCapacities()
-      await refreshImages()
-    } catch (e) {
-      const msg = e?.response?.data
-      setCafeErr(typeof msg === 'string' ? msg : 'Failed to save cafe profile')
-    } finally {
-      setCafeLoading(false)
-    }
+    setNewStaffWorkExperienceList((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)))
   }
 
   async function onCreateStaff() {
     setStaffErr('')
     setStaffMsg('')
+
     if (!canCreateStaff) {
-      setStaffErr('Please fill all required staff fields')
+      setStaffErr('Please fill required fields and upload documents.')
       return
     }
+
     if (!newStaffDocuments || newStaffDocuments.length === 0) {
       setStaffErr('Please upload staff documents')
       return
     }
+
     setStaffLoading(true)
     try {
       const cleanedAcademic = newStaffAcademicInfoList
@@ -765,6 +804,7 @@ export default function OwnerDashboard() {
         academicInfoList: cleanedAcademic,
         workExperienceList: cleanedWork
       }
+
       const res = await createOwnerStaff(ownerUsername, payload, newStaffDocuments)
       setStaffMsg(typeof res === 'string' ? res : 'Staff created')
       setNewStaffFirstName('')
@@ -778,9 +818,7 @@ export default function OwnerDashboard() {
       setNewStaffCity('')
       setNewStaffState('')
       setNewStaffPincode('')
-      setNewStaffAcademicInfoList([
-        { institutionName: '', degree: '', passingYear: '', grade: '', gradeInPercentage: '' }
-      ])
+      setNewStaffAcademicInfoList([{ institutionName: '', degree: '', passingYear: '', grade: '', gradeInPercentage: '' }])
       setNewStaffWorkExperienceList([
         {
           startDate: '',
@@ -793,10 +831,10 @@ export default function OwnerDashboard() {
         }
       ])
       setNewStaffDocuments([])
+      setNewStaffStep(0)
       await refreshStaff()
     } catch (e) {
-      const msg = e?.response?.data
-      setStaffErr(typeof msg === 'string' ? msg : 'Failed to create staff')
+      setStaffErr(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to create staff')
     } finally {
       setStaffLoading(false)
     }
@@ -837,6 +875,21 @@ export default function OwnerDashboard() {
         }
       >
         {label}
+      </button>
+    )
+  }
+
+  function SidebarLogoutButton() {
+    return (
+      <button
+        type="button"
+        className="w-full rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-500/15"
+        onClick={() => {
+          clearSession()
+          window.location.href = '/login'
+        }}
+      >
+        Logout
       </button>
     )
   }
@@ -1308,278 +1361,345 @@ export default function OwnerDashboard() {
               <div className="text-sm font-semibold">Add staff</div>
               <div className="mt-1 text-xs text-slate-600">Create CHEF/WAITER accounts for your cafe.</div>
             </div>
-            <button
-              type="button"
-              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
-              onClick={onCreateStaff}
-              disabled={staffLoading || !canCreateStaff}
-            >
-              Create staff
-            </button>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {newStaffSteps.map((s, i) => (
+              <button
+                key={s}
+                type="button"
+                className={
+                  i === newStaffStep
+                    ? 'rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white'
+                    : i < newStaffStep
+                      ? 'rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800'
+                      : 'rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-700'
+                }
+                onClick={() => {
+                  if (i <= newStaffStep) setNewStaffStep(i)
+                }}
+              >
+                {i + 1}. {s}
+              </button>
+            ))}
           </div>
 
           {staffErr ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{staffErr}</div> : null}
           {staffMsg ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{staffMsg}</div> : null}
 
-          <div className="mt-5 grid gap-4 md:grid-cols-3">
-            <Field label="Role *">
-              <select
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={newStaffRole}
-                onChange={(e) => setNewStaffRole(e.target.value)}
-              >
-                <option value="WAITER">WAITER</option>
-                <option value="CHEF">CHEF</option>
-              </select>
-            </Field>
-            <Field label="First name *">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={newStaffFirstName}
-                onChange={(e) => setNewStaffFirstName(e.target.value)}
-              />
-            </Field>
-            <Field label="Last name *">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={newStaffLastName}
-                onChange={(e) => setNewStaffLastName(e.target.value)}
-              />
-            </Field>
-            <Field label="Email *">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={newStaffEmail}
-                onChange={(e) => setNewStaffEmail(e.target.value)}
-              />
-            </Field>
-            <Field label="Phone *">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={newStaffPhone}
-                onChange={(e) => setNewStaffPhone(e.target.value)}
-              />
-            </Field>
-            <Field label="Contact no">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={newStaffContactNo}
-                onChange={(e) => setNewStaffContactNo(e.target.value)}
-              />
-            </Field>
-            <Field label="Gender">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={newStaffGender}
-                onChange={(e) => setNewStaffGender(e.target.value)}
-              />
-            </Field>
-            <Field label="Marital status">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={newStaffMaritalStatus}
-                onChange={(e) => setNewStaffMaritalStatus(e.target.value)}
-              />
-            </Field>
-          </div>
+          {newStaffStep === 0 ? (
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <Field label="Role *">
+                <select
+                  className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                  value={newStaffRole}
+                  onChange={(e) => setNewStaffRole(e.target.value)}
+                >
+                  <option value="WAITER">WAITER</option>
+                  <option value="CHEF">CHEF</option>
+                </select>
+              </Field>
+              <Field label="First name *">
+                <input
+                  className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                  value={newStaffFirstName}
+                  onChange={(e) => setNewStaffFirstName(e.target.value)}
+                />
+              </Field>
+              <Field label="Last name *">
+                <input
+                  className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                  value={newStaffLastName}
+                  onChange={(e) => setNewStaffLastName(e.target.value)}
+                />
+              </Field>
+              <Field label="Email *">
+                <input
+                  className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                  value={newStaffEmail}
+                  onChange={(e) => setNewStaffEmail(e.target.value)}
+                />
+              </Field>
+              <Field label="Phone *">
+                <input
+                  className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                  value={newStaffPhone}
+                  onChange={(e) => setNewStaffPhone(e.target.value)}
+                />
+              </Field>
+              <Field label="Contact no">
+                <input
+                  className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                  value={newStaffContactNo}
+                  onChange={(e) => setNewStaffContactNo(e.target.value)}
+                />
+              </Field>
+              <Field label="Gender">
+                <select
+                  className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                  value={newStaffGender}
+                  onChange={(e) => setNewStaffGender(e.target.value)}
+                >
+                  <option value="">Select</option>
+                  <option value="MALE">Male</option>
+                  <option value="FEMALE">Female</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </Field>
+              <Field label="Marital status">
+                <select
+                  className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                  value={newStaffMaritalStatus}
+                  onChange={(e) => setNewStaffMaritalStatus(e.target.value)}
+                >
+                  <option value="">Select</option>
+                  <option value="SINGLE">Single</option>
+                  <option value="MARRIED">Married</option>
+                  <option value="DIVORCED">Divorced</option>
+                  <option value="WIDOWED">Widowed</option>
+                </select>
+              </Field>
+            </div>
+          ) : null}
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <div className="md:col-span-2 text-xs font-semibold text-slate-600">Address *</div>
-            <Field label="Street *">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={newStaffStreet}
-                onChange={(e) => setNewStaffStreet(e.target.value)}
-              />
-            </Field>
-            <Field label="City *">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={newStaffCity}
-                onChange={(e) => setNewStaffCity(e.target.value)}
-              />
-            </Field>
-            <Field label="State *">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={newStaffState}
-                onChange={(e) => setNewStaffState(e.target.value)}
-              />
-            </Field>
-            <Field label="Pincode *">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={newStaffPincode}
-                onChange={(e) => setNewStaffPincode(e.target.value)}
-              />
-            </Field>
-          </div>
+          {newStaffStep === 1 ? (
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2 text-xs font-semibold text-slate-600">Address *</div>
+              <Field label="Street *">
+                <input
+                  className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                  value={newStaffStreet}
+                  onChange={(e) => setNewStaffStreet(e.target.value)}
+                />
+              </Field>
+              <Field label="City *">
+                <input
+                  className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                  value={newStaffCity}
+                  onChange={(e) => setNewStaffCity(e.target.value)}
+                />
+              </Field>
+              <Field label="State *">
+                <input
+                  className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                  value={newStaffState}
+                  onChange={(e) => setNewStaffState(e.target.value)}
+                />
+              </Field>
+              <Field label="Pincode *">
+                <input
+                  className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                  value={newStaffPincode}
+                  onChange={(e) => setNewStaffPincode(e.target.value)}
+                />
+              </Field>
+            </div>
+          ) : null}
 
-          <div className="mt-6 grid gap-4">
-            <div className="text-xs font-semibold text-slate-600">Academic info (optional)</div>
-            {newStaffAcademicInfoList.map((row, idx) => (
-              <div key={idx} className="grid gap-4 rounded-2xl border border-black/10 bg-white/50 p-4 md:grid-cols-5">
-                <Field label="Institution">
-                  <input
-                    className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                    value={row.institutionName}
-                    onChange={(e) => updateStaffAcademic(idx, 'institutionName', e.target.value)}
-                  />
-                </Field>
-                <Field label="Degree">
-                  <input
-                    className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                    value={row.degree}
-                    onChange={(e) => updateStaffAcademic(idx, 'degree', e.target.value)}
-                  />
-                </Field>
-                <Field label="Passing year">
-                  <input
-                    className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                    value={row.passingYear}
-                    onChange={(e) => updateStaffAcademic(idx, 'passingYear', e.target.value)}
-                    placeholder="2024"
-                  />
-                </Field>
-                <Field label="Grade">
-                  <input
-                    className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                    value={row.grade}
-                    onChange={(e) => updateStaffAcademic(idx, 'grade', e.target.value)}
-                  />
-                </Field>
-                <div className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <Field label="%">
+          {newStaffStep === 2 ? (
+            <div className="mt-6 grid gap-4">
+              <div className="text-xs font-semibold text-slate-600">Academic info (optional)</div>
+              {newStaffAcademicInfoList.map((row, idx) => (
+                <div key={idx} className="grid gap-4 rounded-2xl border border-black/10 bg-white/50 p-4 md:grid-cols-5">
+                  <Field label="Institution">
+                    <input
+                      className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                      value={row.institutionName}
+                      onChange={(e) => updateStaffAcademic(idx, 'institutionName', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Degree">
+                    <input
+                      className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                      value={row.degree}
+                      onChange={(e) => updateStaffAcademic(idx, 'degree', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Passing year">
+                    <input
+                      className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                      value={row.passingYear}
+                      onChange={(e) => updateStaffAcademic(idx, 'passingYear', e.target.value)}
+                      placeholder="2024"
+                    />
+                  </Field>
+                  <Field label="Grade">
+                    <input
+                      className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                      value={row.grade}
+                      onChange={(e) => updateStaffAcademic(idx, 'grade', e.target.value)}
+                    />
+                  </Field>
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <Field label="%">
+                        <input
+                          className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                          value={row.gradeInPercentage}
+                          onChange={(e) => updateStaffAcademic(idx, 'gradeInPercentage', e.target.value)}
+                          placeholder="0"
+                        />
+                      </Field>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white"
+                      onClick={() => removeStaffAcademic(idx)}
+                      disabled={newStaffAcademicInfoList.length <= 1}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <div>
+                <button
+                  type="button"
+                  className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm hover:bg-white"
+                  onClick={addStaffAcademic}
+                >
+                  Add academic row
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {newStaffStep === 3 ? (
+            <div className="mt-6 grid gap-4">
+              <div className="text-xs font-semibold text-slate-600">Work experience (optional)</div>
+              {newStaffWorkExperienceList.map((row, idx) => (
+                <div key={idx} className="grid gap-4 rounded-2xl border border-black/10 bg-white/50 p-4 md:grid-cols-6">
+                  <Field label="Start date">
+                    <input
+                      type="date"
+                      className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                      value={row.startDate}
+                      onChange={(e) => updateStaffWork(idx, 'startDate', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="End date">
+                    <input
+                      type="date"
+                      className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                      value={row.endDate}
+                      onChange={(e) => updateStaffWork(idx, 'endDate', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Company">
+                    <input
+                      className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                      value={row.companyName}
+                      onChange={(e) => updateStaffWork(idx, 'companyName', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Designation">
+                    <input
+                      className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                      value={row.designation}
+                      onChange={(e) => updateStaffWork(idx, 'designation', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="CTC">
+                    <input
+                      className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                      value={row.ctc}
+                      onChange={(e) => updateStaffWork(idx, 'ctc', e.target.value)}
+                      placeholder="0"
+                    />
+                  </Field>
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <Field label="Currently working">
+                        <select
+                          className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                          value={String(!!row.currentlyWorking)}
+                          onChange={(e) => updateStaffWork(idx, 'currentlyWorking', e.target.value === 'true')}
+                        >
+                          <option value="false">No</option>
+                          <option value="true">Yes</option>
+                        </select>
+                      </Field>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white"
+                      onClick={() => removeStaffWork(idx)}
+                      disabled={newStaffWorkExperienceList.length <= 1}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div className="md:col-span-6">
+                    <Field label="Reason for leaving">
                       <input
                         className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                        value={row.gradeInPercentage}
-                        onChange={(e) => updateStaffAcademic(idx, 'gradeInPercentage', e.target.value)}
-                        placeholder="0"
+                        value={row.reasonForLeaving}
+                        onChange={(e) => updateStaffWork(idx, 'reasonForLeaving', e.target.value)}
                       />
                     </Field>
                   </div>
-                  <button
-                    type="button"
-                    className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white"
-                    onClick={() => removeStaffAcademic(idx)}
-                    disabled={newStaffAcademicInfoList.length <= 1}
-                  >
-                    Remove
-                  </button>
                 </div>
+              ))}
+              <div>
+                <button
+                  type="button"
+                  className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm hover:bg-white"
+                  onClick={addStaffWork}
+                >
+                  Add work row
+                </button>
               </div>
-            ))}
-            <div>
-              <button
-                type="button"
-                className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm hover:bg-white"
-                onClick={addStaffAcademic}
-              >
-                Add academic row
-              </button>
             </div>
-          </div>
+          ) : null}
 
-          <div className="mt-6 grid gap-4">
-            <div className="text-xs font-semibold text-slate-600">Work experience (optional)</div>
-            {newStaffWorkExperienceList.map((row, idx) => (
-              <div key={idx} className="grid gap-4 rounded-2xl border border-black/10 bg-white/50 p-4 md:grid-cols-6">
-                <Field label="Start date">
-                  <input
-                    className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                    value={row.startDate}
-                    onChange={(e) => updateStaffWork(idx, 'startDate', e.target.value)}
-                    placeholder="YYYY-MM-DD"
-                  />
-                </Field>
-                <Field label="End date">
-                  <input
-                    className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                    value={row.endDate}
-                    onChange={(e) => updateStaffWork(idx, 'endDate', e.target.value)}
-                    placeholder="YYYY-MM-DD"
-                  />
-                </Field>
-                <Field label="Company">
-                  <input
-                    className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                    value={row.companyName}
-                    onChange={(e) => updateStaffWork(idx, 'companyName', e.target.value)}
-                  />
-                </Field>
-                <Field label="Designation">
-                  <input
-                    className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                    value={row.designation}
-                    onChange={(e) => updateStaffWork(idx, 'designation', e.target.value)}
-                  />
-                </Field>
-                <Field label="CTC">
-                  <input
-                    className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                    value={row.ctc}
-                    onChange={(e) => updateStaffWork(idx, 'ctc', e.target.value)}
-                    placeholder="0"
-                  />
-                </Field>
-                <div className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <Field label="Currently working">
-                      <select
-                        className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                        value={String(!!row.currentlyWorking)}
-                        onChange={(e) => updateStaffWork(idx, 'currentlyWorking', e.target.value === 'true')}
-                      >
-                        <option value="false">No</option>
-                        <option value="true">Yes</option>
-                      </select>
-                    </Field>
-                  </div>
-                  <button
-                    type="button"
-                    className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white"
-                    onClick={() => removeStaffWork(idx)}
-                    disabled={newStaffWorkExperienceList.length <= 1}
-                  >
-                    Remove
-                  </button>
-                </div>
-                <div className="md:col-span-6">
-                  <Field label="Reason for leaving">
-                    <input
-                      className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                      value={row.reasonForLeaving}
-                      onChange={(e) => updateStaffWork(idx, 'reasonForLeaving', e.target.value)}
-                    />
-                  </Field>
-                </div>
-              </div>
-            ))}
-            <div>
-              <button
-                type="button"
-                className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm hover:bg-white"
-                onClick={addStaffWork}
-              >
-                Add work row
-              </button>
+          {newStaffStep === 4 ? (
+            <div className="mt-6 grid gap-3">
+              <div className="text-xs font-semibold text-slate-600">Documents *</div>
+              <input
+                type="file"
+                multiple
+                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                onChange={(e) => setNewStaffDocuments(Array.from(e.target.files || []))}
+              />
+              <div className="text-xs text-slate-600">Upload one or more documents for the staff member.</div>
             </div>
-          </div>
-
-          <div className="mt-6 grid gap-3">
-            <div className="text-xs font-semibold text-slate-600">Documents *</div>
-            <input
-              type="file"
-              multiple
-              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-              onChange={(e) => setNewStaffDocuments(Array.from(e.target.files || []))}
-            />
-            <div className="text-xs text-slate-600">Upload one or more documents for the staff member.</div>
-          </div>
+          ) : null}
 
           <div className="mt-4 text-xs text-slate-600">
             Credentials are sent to the staff email address.
+          </div>
+
+          <div className="mt-6 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm disabled:opacity-60"
+              disabled={staffLoading || newStaffStep === 0}
+              onClick={() => setNewStaffStep((s) => Math.max(0, s - 1))}
+            >
+              Back
+            </button>
+
+            <div className="flex gap-2">
+              {newStaffStep < newStaffSteps.length - 1 ? (
+                <button
+                  type="button"
+                  className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+                  disabled={staffLoading || !canGoNextStaff}
+                  onClick={() => setNewStaffStep((s) => Math.min(newStaffSteps.length - 1, s + 1))}
+                >
+                  Next
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+                  onClick={onCreateStaff}
+                  disabled={staffLoading || !canCreateStaff}
+                >
+                  {staffLoading ? 'Creating...' : 'Create staff'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1660,23 +1780,10 @@ export default function OwnerDashboard() {
             <div className="text-xs text-slate-500">Cafe Owner Dashboard</div>
             <h1 className="mt-1 text-3xl font-extrabold">Welcome, {session?.username || 'Owner'}</h1>
           </div>
-          <div className="flex gap-3">
-            <Link className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm" to="/">Home</Link>
-            <button
-              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
-              onClick={() => {
-                clearSession()
-                window.location.href = '/login'
-              }}
-              type="button"
-            >
-              Logout
-            </button>
-          </div>
         </div>
 
-        <div className="mt-5 grid gap-4 lg:grid-cols-[260px_1fr]">
-          <aside className="h-fit rounded-2xl border border-black/10 bg-white/70 p-4">
+        <div className="mt-5 flex h-[calc(100vh-140px)] min-h-0 gap-4 overflow-hidden">
+          <aside className="min-h-0 w-[260px] shrink-0 rounded-2xl border border-black/10 bg-white/70 p-4 sticky top-6 h-[calc(100vh-48px)] overflow-y-auto">
             <div className="text-xs font-semibold uppercase text-slate-500">Navigation</div>
             <div className="mt-3 grid gap-1">
               {sidebarItems.map((item) => (
@@ -1688,9 +1795,13 @@ export default function OwnerDashboard() {
                 Create your cafe profile first to unlock Staff, Menu, Tables/Functions, Images, Bookings and Orders.
               </div>
             ) : null}
+
+            <div className="mt-4">
+              <SidebarLogoutButton />
+            </div>
           </aside>
 
-          <main>
+          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto pr-1">
             {hasCafe ? (
               <>
                 {tab === 'profile' ? (

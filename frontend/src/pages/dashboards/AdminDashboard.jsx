@@ -50,6 +50,8 @@ export default function AdminDashboard() {
   const [addOwnerBusy, setAddOwnerBusy] = useState(false)
   const [addOwnerErr, setAddOwnerErr] = useState('')
   const [addOwnerMsg, setAddOwnerMsg] = useState('')
+  const addOwnerSteps = ['Personal details', 'Address', 'Academic info', 'Work experience', 'Documents']
+  const [addOwnerStep, setAddOwnerStep] = useState(0)
   const [ownerFirstName, setOwnerFirstName] = useState('')
   const [ownerLastName, setOwnerLastName] = useState('')
   const [ownerEmail, setOwnerEmail] = useState('')
@@ -62,6 +64,20 @@ export default function AdminDashboard() {
   const [ownerState, setOwnerState] = useState('')
   const [ownerPincode, setOwnerPincode] = useState('')
   const [ownerDocs, setOwnerDocs] = useState([])
+  const [ownerAcademicInfoList, setOwnerAcademicInfoList] = useState([
+    { institutionName: '', degree: '', passingYear: '', grade: '', gradeInPercentage: '' }
+  ])
+  const [ownerWorkExperienceList, setOwnerWorkExperienceList] = useState([
+    {
+      startDate: '',
+      endDate: '',
+      currentlyWorking: false,
+      companyName: '',
+      designation: '',
+      ctc: '',
+      reasonForLeaving: ''
+    }
+  ])
 
   const [showAddCafe, setShowAddCafe] = useState(false)
   const [addCafeBusy, setAddCafeBusy] = useState(false)
@@ -230,25 +246,111 @@ export default function AdminDashboard() {
     }
   }
 
+  function updateOwnerAcademic(idx, key, value) {
+    setOwnerAcademicInfoList((prev) => prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)))
+  }
+
+  function addOwnerAcademic() {
+    setOwnerAcademicInfoList((prev) => [
+      ...prev,
+      { institutionName: '', degree: '', passingYear: '', grade: '', gradeInPercentage: '' }
+    ])
+  }
+
+  function removeOwnerAcademic(idx) {
+    setOwnerAcademicInfoList((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  function updateOwnerWork(idx, key, value) {
+    setOwnerWorkExperienceList((prev) => prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)))
+  }
+
+  function addOwnerWork() {
+    setOwnerWorkExperienceList((prev) => [
+      ...prev,
+      {
+        startDate: '',
+        endDate: '',
+        currentlyWorking: false,
+        companyName: '',
+        designation: '',
+        ctc: '',
+        reasonForLeaving: ''
+      }
+    ])
+  }
+
+  function removeOwnerWork(idx) {
+    setOwnerWorkExperienceList((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  const canGoNextAddOwner = useMemo(() => {
+    if (addOwnerStep === 0) {
+      return (
+        ownerFirstName.trim().length > 0 &&
+        ownerLastName.trim().length > 0 &&
+        ownerEmail.trim().length > 0
+      )
+    }
+    if (addOwnerStep === 1) {
+      return ownerCity.trim().length > 0
+    }
+    if (addOwnerStep === 2) {
+      return true
+    }
+    if (addOwnerStep === 3) {
+      return true
+    }
+    if (addOwnerStep === 4) {
+      return Array.isArray(ownerDocs) && ownerDocs.length > 0
+    }
+    return false
+  }, [addOwnerStep, ownerFirstName, ownerLastName, ownerEmail, ownerCity, ownerDocs])
+
+  const canSubmitAddOwner = useMemo(() => {
+    return (
+      ownerFirstName.trim() &&
+      ownerLastName.trim() &&
+      ownerEmail.trim() &&
+      ownerCity.trim() &&
+      Array.isArray(ownerDocs) &&
+      ownerDocs.length > 0
+    )
+  }, [ownerFirstName, ownerLastName, ownerEmail, ownerCity, ownerDocs])
+
   async function onCreateOwner() {
     setAddOwnerErr('')
     setAddOwnerMsg('')
 
-    if (!ownerFirstName.trim() || !ownerLastName.trim() || !ownerEmail.trim() || !ownerPhone.trim()) {
-      setAddOwnerErr('Please fill all required owner fields.')
-      return
-    }
-    if (!ownerStreet.trim() || !ownerCity.trim() || !ownerState.trim() || !ownerPincode.trim()) {
-      setAddOwnerErr('Please fill the required address fields.')
-      return
-    }
-    if (!Array.isArray(ownerDocs) || ownerDocs.length === 0) {
-      setAddOwnerErr('Please upload at least 1 document.')
+    if (!canSubmitAddOwner) {
+      setAddOwnerErr('Please complete all steps before submitting.')
       return
     }
 
     setAddOwnerBusy(true)
     try {
+      const cleanedAcademic = ownerAcademicInfoList
+        .map((a) => ({
+          institutionName: String(a?.institutionName || '').trim(),
+          degree: String(a?.degree || '').trim(),
+          passingYear: a?.passingYear === '' ? 0 : Number(a?.passingYear || 0),
+          grade: String(a?.grade || '').trim(),
+          gradeInPercentage: a?.gradeInPercentage === '' ? 0 : Number(a?.gradeInPercentage || 0)
+        }))
+        .filter((a) => a.institutionName || a.degree || a.passingYear || a.grade || a.gradeInPercentage)
+
+      const cleanedWork = ownerWorkExperienceList
+        .map((w) => ({
+          startDate: String(w?.startDate || '').trim(),
+          endDate: String(w?.endDate || '').trim(),
+          currentlyWorking: !!w?.currentlyWorking,
+          companyName: String(w?.companyName || '').trim(),
+          designation: String(w?.designation || '').trim(),
+          ctc: w?.ctc === '' ? 0 : Number(w?.ctc || 0),
+          reasonForLeaving: String(w?.reasonForLeaving || '').trim()
+        }))
+        .filter((w) => w.startDate || w.endDate || w.companyName || w.designation || w.ctc || w.reasonForLeaving)
+
       const payload = {
         role: 'OWNER',
         personalDetails: {
@@ -266,8 +368,8 @@ export default function AdminDashboard() {
           state: ownerState.trim(),
           pincode: ownerPincode.trim()
         },
-        academicInfoList: [],
-        workExperienceList: []
+        academicInfoList: cleanedAcademic,
+        workExperienceList: cleanedWork
       }
 
       const msg = await createOwner(payload, ownerDocs)
@@ -286,6 +388,19 @@ export default function AdminDashboard() {
       setOwnerState('')
       setOwnerPincode('')
       setOwnerDocs([])
+      setOwnerAcademicInfoList([{ institutionName: '', degree: '', passingYear: '', grade: '', gradeInPercentage: '' }])
+      setOwnerWorkExperienceList([
+        {
+          startDate: '',
+          endDate: '',
+          currentlyWorking: false,
+          companyName: '',
+          designation: '',
+          ctc: '',
+          reasonForLeaving: ''
+        }
+      ])
+      setAddOwnerStep(0)
 
       setShowAddOwner(false)
     } catch (e) {
@@ -404,58 +519,73 @@ export default function AdminDashboard() {
     URL.revokeObjectURL(url)
   }
 
-  function PieChart({ data, size = 180 }) {
+  function PieChart({ data, showLegend = true }) {
     const total = data.reduce((sum, d) => sum + (Number(d.value) || 0), 0)
-    const r = size / 2
-    const cx = r
-    const cy = r
-    const stroke = 22
-    let acc = 0
+    const r = 42
+    const c = 50
+    const stroke = 10
+    const circumference = 2 * Math.PI * r
 
-    const arcs = total === 0
+    let offset = 0
+    const segments = total === 0
       ? []
       : data.map((d) => {
           const value = Number(d.value) || 0
-          const start = (acc / total) * Math.PI * 2
-          acc += value
-          const end = (acc / total) * Math.PI * 2
-
-          const x1 = cx + r * Math.cos(start)
-          const y1 = cy + r * Math.sin(start)
-          const x2 = cx + r * Math.cos(end)
-          const y2 = cy + r * Math.sin(end)
-          const large = end - start > Math.PI ? 1 : 0
-          const path = `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`
-          return { path, color: d.color, label: d.label, value }
+          const ratio = value / total
+          const dash = circumference * ratio
+          const seg = {
+            label: d.label,
+            value,
+            color: d.color,
+            dash,
+            offset
+          }
+          offset += dash
+          return seg
         })
 
     return (
-      <div className="flex flex-col items-center gap-3">
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e2e8f0" strokeWidth={stroke} />
-          {arcs.map((a, idx) => (
-            <path key={idx} d={a.path} fill="none" stroke={a.color} strokeWidth={stroke} strokeLinecap="butt" />
-          ))}
-          <circle cx={cx} cy={cy} r={r - stroke} fill="white" />
-          <text x={cx} y={cy - 2} textAnchor="middle" className="fill-slate-900" style={{ fontSize: 18, fontWeight: 800 }}>
-            {total}
-          </text>
-          <text x={cx} y={cy + 18} textAnchor="middle" className="fill-slate-500" style={{ fontSize: 11, fontWeight: 600 }}>
-            TOTAL
-          </text>
-        </svg>
-
-        <div className="grid w-full gap-2 text-sm">
-          {data.map((d) => (
-            <div key={d.label} className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: d.color }} />
-                <span className="text-slate-700">{d.label}</span>
-              </div>
-              <div className="font-semibold text-slate-900">{d.value}</div>
-            </div>
-          ))}
+      <div className="flex w-full flex-col items-center gap-3">
+        <div className="w-full max-w-[220px]">
+          <svg viewBox="0 0 100 100" className="h-auto w-full">
+            <circle cx={c} cy={c} r={r} fill="none" stroke="#e2e8f0" strokeWidth={stroke} />
+            {segments.map((s) => (
+              <circle
+                key={s.label}
+                cx={c}
+                cy={c}
+                r={r}
+                fill="none"
+                stroke={s.color}
+                strokeWidth={stroke}
+                strokeDasharray={`${s.dash} ${circumference - s.dash}`}
+                strokeDashoffset={-s.offset}
+                strokeLinecap="butt"
+                transform="rotate(-90 50 50)"
+              />
+            ))}
+            <text x={c} y={c} textAnchor="middle" dominantBaseline="middle" className="fill-slate-900" style={{ fontSize: 16, fontWeight: 800 }}>
+              {total}
+            </text>
+            <text x={c} y={c + 14} textAnchor="middle" dominantBaseline="middle" className="fill-slate-500" style={{ fontSize: 9, fontWeight: 700 }}>
+              TOTAL
+            </text>
+          </svg>
         </div>
+
+        {showLegend ? (
+          <div className="grid w-full gap-2 text-sm">
+            {data.map((d) => (
+              <div key={d.label} className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: d.color }} />
+                  <span className="text-slate-700">{d.label}</span>
+                </div>
+                <div className="font-semibold text-slate-900">{d.value}</div>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
     )
   }
@@ -561,52 +691,7 @@ export default function AdminDashboard() {
 
     return (
       <>
-        <div className="flex items-center justify-between">
-          <SectionTitle
-            breadcrumb="Dashboard / Overview"
-            title="Dashboard Overview"
-            subtitle="Platform status and key metrics"
-          />
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm"
-              onClick={() => refresh()}
-            >
-              Refresh
-            </button>
-            <button
-              type="button"
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm"
-              onClick={() => {
-                setSection('users')
-                setQ('pending')
-              }}
-            >
-              View pending
-            </button>
-            <button
-              type="button"
-              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
-              onClick={() => {
-                const header = ['id', 'username', 'role', 'status', 'email', 'phone']
-                const rows = users.map((u) => [
-                  u.id,
-                  u.username,
-                  u.role,
-                  u.approvalStatus || 'PENDING',
-                  u.email || '',
-                  u.phone || ''
-                ])
-                downloadCsv('users.csv', [header, ...rows])
-              }}
-            >
-              Export users
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-3">
           <Card label="TOTAL CAFES REGISTERED" value={cafes.length} />
           <Card label="TOTAL USERS" value={counts.total} />
           <Card label="PENDING APPROVALS" value={counts.pending} />
@@ -618,7 +703,7 @@ export default function AdminDashboard() {
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-black/10 bg-white/70 p-5">
+          <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold">Approval status</div>
@@ -626,35 +711,43 @@ export default function AdminDashboard() {
               </div>
               <div className="text-xs text-slate-500">{new Date().toLocaleDateString()}</div>
             </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-2 md:items-center">
-              <PieChart data={approvalData} size={190} />
-              <div className="rounded-2xl border border-black/10 bg-white/50 p-4">
-                <div className="text-sm font-semibold">Quick insights</div>
-                <div className="mt-2 grid gap-2 text-sm text-slate-700">
-                  <div>
-                    <span className="text-slate-500">Approval rate:</span>{' '}
-                    <span className="font-semibold">
-                      {counts.total === 0 ? '0%' : `${Math.round((counts.approved / counts.total) * 100)}%`}
-                    </span>
+            <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="w-full sm:max-w-[260px]">
+                <PieChart data={approvalData} showLegend={false} />
+              </div>
+              <div className="w-full rounded-2xl border border-black/10 bg-white/50 p-4 sm:max-w-[320px]">
+                <div className="text-sm font-semibold">Approval summary</div>
+                <div className="mt-3 grid gap-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-slate-700">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#16a34a' }} />
+                      <span>Approved</span>
+                    </div>
+                    <div className="font-semibold text-slate-900">{counts.approved}</div>
                   </div>
-                  <div>
-                    <span className="text-slate-500">Pending load:</span>{' '}
-                    <span className="font-semibold">
-                      {counts.total === 0 ? '0%' : `${Math.round((counts.pending / counts.total) * 100)}%`}
-                    </span>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-slate-700">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#f59e0b' }} />
+                      <span>Pending</span>
+                    </div>
+                    <div className="font-semibold text-slate-900">{counts.pending}</div>
                   </div>
-                  <div className="text-xs text-slate-500">
-                    Tip: Use “View pending” to quickly approve/deny new users.
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-slate-700">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#ef4444' }} />
+                      <span>Denied</span>
+                    </div>
+                    <div className="font-semibold text-slate-900">{counts.denied}</div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-black/10 bg-white/70 p-5">
+          <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
             <div className="text-sm font-semibold">Users by role</div>
             <div className="mt-1 text-xs text-slate-500">Distribution of roles across the platform</div>
-            <div className="mt-4">
+            <div className="mt-3">
               {roleCounts.length > 0 ? <BarChart data={roleCounts} /> : <div className="text-sm text-slate-600">No users yet.</div>}
             </div>
           </div>
@@ -1225,8 +1318,8 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-[#EDE4DA] text-slate-900">
-      <div className="flex min-h-screen">
-        <aside className="hidden w-64 flex-col border-r border-black/10 bg-white/70 text-slate-900 md:flex">
+      <div className="flex h-screen overflow-hidden">
+        <aside className="hidden min-h-0 w-64 flex-col border-r border-black/10 bg-white/70 text-slate-900 md:flex md:sticky md:top-0 md:h-screen overflow-y-auto">
           <div className="border-b border-black/10 bg-white/60 px-5 py-4 text-lg font-extrabold text-slate-900">Digital Cafe Admin</div>
           <div className="px-5 py-6">
             <div className="flex items-center gap-3">
@@ -1246,10 +1339,23 @@ export default function AdminDashboard() {
               ))}
             </div>
           </div>
+
+          <div className="mt-auto px-4 pb-6 pt-4">
+            <button
+              className="w-full rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-500/15"
+              onClick={() => {
+                clearSession()
+                window.location.href = '/login'
+              }}
+              type="button"
+            >
+              Logout
+            </button>
+          </div>
         </aside>
 
-        <div className="flex flex-1 flex-col">
-          <header className="border-b border-slate-200 bg-white">
+        <div className="flex min-h-0 flex-1 flex-col">
+          {/* <header className="border-b border-slate-200 bg-white">
             <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
               <div className="flex flex-1 items-center gap-3">
                 <div className="hidden text-sm font-semibold text-slate-700 md:block">{SECTIONS[section]}</div>
@@ -1258,25 +1364,10 @@ export default function AdminDashboard() {
                   <div className="flex-1" />
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Link className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm" to="/">
-                  Home
-                </Link>
-                <button
-                  className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
-                  onClick={() => {
-                    clearSession()
-                    window.location.href = '/login'
-                  }}
-                  type="button"
-                >
-                  Logout
-                </button>
-              </div>
             </div>
-          </header>
+          </header> */}
 
-          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-6">
+          <main className="mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-y-auto px-4 py-6 md:px-6">
             {section === 'overview' ? <OverviewSection /> : null}
             {section === 'owners' ? <OwnerManagementSection /> : null}
             {section === 'cafes' ? <CafeManagementSection /> : null}
@@ -1475,37 +1566,169 @@ export default function AdminDashboard() {
                   </button>
                 </div>
 
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  {addOwnerSteps.map((s, i) => (
+                    <button
+                      key={s}
+                      type="button"
+                      className={
+                        i === addOwnerStep
+                          ? 'rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white'
+                          : i < addOwnerStep
+                            ? 'rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800'
+                            : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700'
+                      }
+                      onClick={() => {
+                        if (i <= addOwnerStep) setAddOwnerStep(i)
+                      }}
+                    >
+                      {i + 1}. {s}
+                    </button>
+                  ))}
+                </div>
+
                 {addOwnerErr ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{addOwnerErr}</div> : null}
                 {addOwnerMsg ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{addOwnerMsg}</div> : null}
 
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="First name *" value={ownerFirstName} onChange={(e) => setOwnerFirstName(e.target.value)} />
-                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Last name *" value={ownerLastName} onChange={(e) => setOwnerLastName(e.target.value)} />
-                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Email *" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} />
-                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Phone *" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} />
-                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Contact no" value={ownerContactNo} onChange={(e) => setOwnerContactNo(e.target.value)} />
-                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Gender" value={ownerGender} onChange={(e) => setOwnerGender(e.target.value)} />
-                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Marital status" value={ownerMaritalStatus} onChange={(e) => setOwnerMaritalStatus(e.target.value)} />
-                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Street *" value={ownerStreet} onChange={(e) => setOwnerStreet(e.target.value)} />
-                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="City *" value={ownerCity} onChange={(e) => setOwnerCity(e.target.value)} />
-                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="State *" value={ownerState} onChange={(e) => setOwnerState(e.target.value)} />
-                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Pincode *" value={ownerPincode} onChange={(e) => setOwnerPincode(e.target.value)} />
-                </div>
+                {addOwnerStep === 0 ? (
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="First name *" value={ownerFirstName} onChange={(e) => setOwnerFirstName(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Last name *" value={ownerLastName} onChange={(e) => setOwnerLastName(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Email *" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Phone" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Contact no" value={ownerContactNo} onChange={(e) => setOwnerContactNo(e.target.value)} />
+                    <select className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" value={ownerGender} onChange={(e) => setOwnerGender(e.target.value)}>
+                      <option value="">Gender</option>
+                      <option value="MALE">Male</option>
+                      <option value="FEMALE">Female</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                    <select className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" value={ownerMaritalStatus} onChange={(e) => setOwnerMaritalStatus(e.target.value)}>
+                      <option value="">Marital status</option>
+                      <option value="SINGLE">Single</option>
+                      <option value="MARRIED">Married</option>
+                      <option value="DIVORCED">Divorced</option>
+                      <option value="WIDOWED">Widowed</option>
+                    </select>
+                  </div>
+                ) : null}
 
-                <div className="mt-4">
-                  <div className="text-xs font-semibold uppercase text-slate-500">Documents *</div>
-                  <input type="file" multiple className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" onChange={(e) => setOwnerDocs(Array.from(e.target.files || []))} />
-                </div>
+                {addOwnerStep === 1 ? (
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm md:col-span-2" placeholder="Street" value={ownerStreet} onChange={(e) => setOwnerStreet(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="City *" value={ownerCity} onChange={(e) => setOwnerCity(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="State" value={ownerState} onChange={(e) => setOwnerState(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Pincode" value={ownerPincode} onChange={(e) => setOwnerPincode(e.target.value)} />
+                  </div>
+                ) : null}
 
-                <div className="mt-5 flex justify-end">
+                {addOwnerStep === 2 ? (
+                  <div className="mt-5 grid gap-4">
+                    {ownerAcademicInfoList.map((row, idx) => (
+                      <div key={idx} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm font-semibold">Academic #{idx + 1}</div>
+                          {ownerAcademicInfoList.length > 1 ? (
+                            <button type="button" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" onClick={() => removeOwnerAcademic(idx)}>
+                              Remove
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="mt-3 grid gap-4 md:grid-cols-2">
+                          <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Institution" value={row.institutionName} onChange={(e) => updateOwnerAcademic(idx, 'institutionName', e.target.value)} />
+                          <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Degree" value={row.degree} onChange={(e) => updateOwnerAcademic(idx, 'degree', e.target.value)} />
+                          <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Passing year" value={row.passingYear} onChange={(e) => updateOwnerAcademic(idx, 'passingYear', e.target.value)} />
+                          <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Grade" value={row.grade} onChange={(e) => updateOwnerAcademic(idx, 'grade', e.target.value)} />
+                          <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm md:col-span-2" placeholder="Grade in %" value={row.gradeInPercentage} onChange={(e) => updateOwnerAcademic(idx, 'gradeInPercentage', e.target.value)} />
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex justify-end">
+                      <button type="button" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm" onClick={addOwnerAcademic}>
+                        Add academic
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {addOwnerStep === 3 ? (
+                  <div className="mt-5 grid gap-4">
+                    {ownerWorkExperienceList.map((row, idx) => (
+                      <div key={idx} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm font-semibold">Work #{idx + 1}</div>
+                          {ownerWorkExperienceList.length > 1 ? (
+                            <button type="button" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" onClick={() => removeOwnerWork(idx)}>
+                              Remove
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="mt-3 grid gap-4 md:grid-cols-2">
+                          <input type="date" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" value={row.startDate} onChange={(e) => updateOwnerWork(idx, 'startDate', e.target.value)} />
+                          <input type="date" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" value={row.endDate} onChange={(e) => updateOwnerWork(idx, 'endDate', e.target.value)} />
+                          <label className="flex items-center gap-2 text-sm text-slate-700">
+                            <input type="checkbox" checked={!!row.currentlyWorking} onChange={(e) => updateOwnerWork(idx, 'currentlyWorking', e.target.checked)} />
+                            Currently working
+                          </label>
+                          <div />
+                          <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Company name" value={row.companyName} onChange={(e) => updateOwnerWork(idx, 'companyName', e.target.value)} />
+                          <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Designation" value={row.designation} onChange={(e) => updateOwnerWork(idx, 'designation', e.target.value)} />
+                          <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="CTC" value={row.ctc} onChange={(e) => updateOwnerWork(idx, 'ctc', e.target.value)} />
+                          <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Reason for leaving" value={row.reasonForLeaving} onChange={(e) => updateOwnerWork(idx, 'reasonForLeaving', e.target.value)} />
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex justify-end">
+                      <button type="button" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm" onClick={addOwnerWork}>
+                        Add work
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {addOwnerStep === 4 ? (
+                  <div className="mt-5">
+                    <div className="text-xs font-semibold uppercase text-slate-500">Documents *</div>
+                    <input type="file" multiple className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" onChange={(e) => setOwnerDocs(Array.from(e.target.files || []))} />
+                    {Array.isArray(ownerDocs) && ownerDocs.length > 0 ? (
+                      <div className="mt-3 text-sm text-slate-700">Selected: {ownerDocs.length} file(s)</div>
+                    ) : (
+                      <div className="mt-3 text-sm text-slate-600">Please upload at least 1 document.</div>
+                    )}
+                  </div>
+                ) : null}
+
+                <div className="mt-6 flex items-center justify-between gap-3">
                   <button
                     type="button"
-                    className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
-                    disabled={addOwnerBusy}
-                    onClick={onCreateOwner}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm disabled:opacity-50"
+                    disabled={addOwnerBusy || addOwnerStep === 0}
+                    onClick={() => setAddOwnerStep((s) => Math.max(0, s - 1))}
                   >
-                    {addOwnerBusy ? 'Creating...' : 'Create owner'}
+                    Back
                   </button>
+
+                  <div className="flex gap-2">
+                    {addOwnerStep < addOwnerSteps.length - 1 ? (
+                      <button
+                        type="button"
+                        className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                        disabled={addOwnerBusy || !canGoNextAddOwner}
+                        onClick={() => setAddOwnerStep((s) => Math.min(addOwnerSteps.length - 1, s + 1))}
+                      >
+                        Next
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                        disabled={addOwnerBusy || !canSubmitAddOwner}
+                        onClick={onCreateOwner}
+                      >
+                        {addOwnerBusy ? 'Creating...' : 'Create owner'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
