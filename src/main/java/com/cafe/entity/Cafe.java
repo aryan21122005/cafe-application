@@ -8,6 +8,8 @@ import lombok.Setter;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.cafe.entity.CafeDocument;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -22,11 +24,17 @@ public class Cafe {
     @Column(nullable = false)
     private String cafeName;
 
+    private String ownerNames;
+
+    private String pocDesignation;
+
     private String description;
 
     private String phone;
 
     private String email;
+
+    private String whatsappNumber;
 
     private String addressLine;
 
@@ -39,6 +47,20 @@ public class Cafe {
     private String openingTime;
 
     private String closingTime;
+
+    private String fssaiNumber;
+
+    private String panNumber;
+
+    private String gstin;
+
+    private String shopLicenseNumber;
+
+    private String bankAccountNumber;
+
+    private String bankIfsc;
+
+    private String bankAccountHolderName;
 
     @Column(nullable = false)
     private Boolean active = true;
@@ -54,4 +76,7 @@ public class Cafe {
             inverseJoinColumns = @JoinColumn(name = "user_id")
     )
     private List<User> staff = new ArrayList<>();
+
+    @OneToMany(mappedBy = "cafe", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CafeDocument> documents = new ArrayList<>();
 }

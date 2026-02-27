@@ -9,6 +9,7 @@ import com.cafe.dto.MenuItemRequest;
 import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.OwnerStaffCreateRequest;
 import com.cafe.dto.OwnerStaffRow;
+import com.cafe.dto.CafeDocumentRow;
 import com.cafe.service.OwnerService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -45,6 +46,30 @@ public class OwnerController {
             @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername
     ) {
         return ownerService.deleteCafe(ownerUsername);
+    }
+
+    @GetMapping("/cafe/documents")
+    public ResponseEntity<List<CafeDocumentRow>> listCafeDocuments(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername
+    ) {
+        return ownerService.listCafeDocuments(ownerUsername);
+    }
+
+    @PostMapping(value = "/cafe/documents/{docKey}", consumes = {"multipart/form-data"})
+    public ResponseEntity<CafeDocumentRow> uploadCafeDocument(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
+            @PathVariable String docKey,
+            @RequestPart("file") MultipartFile file
+    ) {
+        return ownerService.uploadCafeDocument(ownerUsername, docKey, file);
+    }
+
+    @GetMapping("/cafe/documents/{id}")
+    public ResponseEntity<byte[]> downloadCafeDocument(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
+            @PathVariable Long id
+    ) {
+        return ownerService.downloadCafeDocument(ownerUsername, id);
     }
 
     @GetMapping("/staff")

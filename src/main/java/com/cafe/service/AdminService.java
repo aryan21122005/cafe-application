@@ -8,6 +8,7 @@ import com.cafe.dto.RegisterRequest;
 import com.cafe.dto.CafeProfileRequest;
 import com.cafe.dto.AdminOwnerRow;
 import com.cafe.dto.MenuItemRow;
+import com.cafe.dto.CafeDocumentRow;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -28,6 +29,12 @@ public interface AdminService {
     ResponseEntity<List<MenuItemRow>> listCafeMenu(Long cafeId);
 
     ResponseEntity<String> deleteCafe(Long cafeId);
+
+    ResponseEntity<List<CafeDocumentRow>> listCafeDocuments(Long cafeId);
+
+    ResponseEntity<CafeDocumentRow> uploadCafeDocument(Long cafeId, String docKey, MultipartFile file);
+
+    ResponseEntity<byte[]> downloadCafeDocument(Long id);
 
     ResponseEntity<AdminUserDetail> getUserDetail(Long id);
 

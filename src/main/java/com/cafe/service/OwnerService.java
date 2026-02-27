@@ -9,6 +9,7 @@ import com.cafe.dto.MenuItemRequest;
 import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.OwnerStaffCreateRequest;
 import com.cafe.dto.OwnerStaffRow;
+import com.cafe.dto.CafeDocumentRow;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -21,6 +22,12 @@ public interface OwnerService {
     ResponseEntity<CafeProfileResponse> upsertCafe(String ownerUsername, CafeProfileRequest request);
 
     ResponseEntity<String> deleteCafe(String ownerUsername);
+
+    ResponseEntity<List<CafeDocumentRow>> listCafeDocuments(String ownerUsername);
+
+    ResponseEntity<CafeDocumentRow> uploadCafeDocument(String ownerUsername, String docKey, MultipartFile file);
+
+    ResponseEntity<byte[]> downloadCafeDocument(String ownerUsername, Long id);
 
     ResponseEntity<List<OwnerStaffRow>> listStaff(String ownerUsername);
 

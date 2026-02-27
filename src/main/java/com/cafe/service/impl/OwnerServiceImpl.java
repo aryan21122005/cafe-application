@@ -2,6 +2,7 @@ package com.cafe.service.impl;
 
 import com.cafe.dto.CafeProfileRequest;
 import com.cafe.dto.CafeProfileResponse;
+import com.cafe.dto.CafeDocumentRow;
 import com.cafe.dto.CafeImageRow;
 import com.cafe.dto.FunctionCapacityRequest;
 import com.cafe.dto.FunctionCapacityRow;
@@ -11,6 +12,7 @@ import com.cafe.dto.OwnerStaffCreateRequest;
 import com.cafe.dto.OwnerStaffRow;
 import com.cafe.entity.ApprovalStatus;
 import com.cafe.entity.Cafe;
+import com.cafe.entity.CafeDocument;
 import com.cafe.entity.CafeImage;
 import com.cafe.entity.FunctionCapacity;
 import com.cafe.entity.FunctionType;
@@ -22,6 +24,7 @@ import com.cafe.entity.Address;
 import com.cafe.entity.Document;
 import com.cafe.entity.WorkExperience;
 import com.cafe.repository.CafeRepository;
+import com.cafe.repository.CafeDocumentRepository;
 import com.cafe.repository.CafeImageRepository;
 import com.cafe.repository.FunctionCapacityRepository;
 import com.cafe.repository.MenuItemRepository;
@@ -31,6 +34,8 @@ import com.cafe.service.OwnerService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -68,6 +73,9 @@ public class OwnerServiceImpl implements OwnerService {
     private CafeImageRepository cafeImageRepository;
 
     @Autowired
+    private CafeDocumentRepository cafeDocumentRepository;
+
+    @Autowired
     private BCryptPasswordEncoder passwordEncoder;
 
     @Autowired(required = false)
@@ -81,6 +89,94 @@ public class OwnerServiceImpl implements OwnerService {
 
     private String generateTempPassword() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+    }
+
+    @Override
+    public ResponseEntity<List<CafeDocumentRow>> listCafeDocuments(String ownerUsername) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            List<CafeDocument> docs = cafeDocumentRepository.findByCafeId(cafe.getId());
+            List<CafeDocumentRow> rows = docs.stream().map(this::toCafeDocumentRow).toList();
+            return ResponseEntity.ok(rows);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<CafeDocumentRow> uploadCafeDocument(String ownerUsername, String docKey, MultipartFile file) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (docKey == null || docKey.isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (file == null || file.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            CafeDocument doc = cafeDocumentRepository.findByCafeIdAndDocKey(cafe.getId(), docKey.trim()).orElseGet(CafeDocument::new);
+            doc.setCafe(cafe);
+            doc.setDocKey(docKey.trim());
+            doc.setDocumentName(file.getOriginalFilename());
+            doc.setDocumentType(file.getContentType());
+            doc.setSize(file.getSize());
+            try {
+                doc.setData(file.getBytes());
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to read uploaded document", e);
+            }
+            cafeDocumentRepository.save(doc);
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(toCafeDocumentRow(doc));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<byte[]> downloadCafeDocument(String ownerUsername, Long id) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            if (id == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            CafeDocument doc = cafeDocumentRepository.findById(id).orElse(null);
+            if (doc == null || doc.getCafe() == null || doc.getCafe().getId() == null || !doc.getCafe().getId().equals(cafe.getId())) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            String filename = doc.getDocumentName() == null ? ("cafe-document-" + id) : doc.getDocumentName();
+            String contentType = doc.getDocumentType() == null ? MediaType.APPLICATION_OCTET_STREAM_VALUE : doc.getDocumentType();
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename.replace("\"", "") + "\"")
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .body(doc.getData());
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     private User requireOwner(String ownerUsername) {
@@ -101,15 +197,25 @@ public class OwnerServiceImpl implements OwnerService {
         CafeProfileResponse res = new CafeProfileResponse();
         res.setId(cafe.getId());
         res.setCafeName(cafe.getCafeName());
+        res.setOwnerNames(cafe.getOwnerNames());
+        res.setPocDesignation(cafe.getPocDesignation());
         res.setDescription(cafe.getDescription());
         res.setPhone(cafe.getPhone());
         res.setEmail(cafe.getEmail());
+        res.setWhatsappNumber(cafe.getWhatsappNumber());
         res.setAddressLine(cafe.getAddressLine());
         res.setCity(cafe.getCity());
         res.setState(cafe.getState());
         res.setPincode(cafe.getPincode());
         res.setOpeningTime(cafe.getOpeningTime());
         res.setClosingTime(cafe.getClosingTime());
+        res.setFssaiNumber(cafe.getFssaiNumber());
+        res.setPanNumber(cafe.getPanNumber());
+        res.setGstin(cafe.getGstin());
+        res.setShopLicenseNumber(cafe.getShopLicenseNumber());
+        res.setBankAccountNumber(cafe.getBankAccountNumber());
+        res.setBankIfsc(cafe.getBankIfsc());
+        res.setBankAccountHolderName(cafe.getBankAccountHolderName());
         res.setActive(cafe.getActive());
         res.setOwnerUsername(cafe.getOwner() == null ? null : cafe.getOwner().getUsername());
         return res;
@@ -118,6 +224,16 @@ public class OwnerServiceImpl implements OwnerService {
     private Cafe requireCafe(User owner) {
         if (owner == null) return null;
         return cafeRepository.findByOwnerUsername(owner.getUsername()).orElse(null);
+    }
+
+    private CafeDocumentRow toCafeDocumentRow(CafeDocument doc) {
+        CafeDocumentRow r = new CafeDocumentRow();
+        r.setId(doc.getId());
+        r.setDocKey(doc.getDocKey());
+        r.setDocumentName(doc.getDocumentName());
+        r.setDocumentType(doc.getDocumentType());
+        r.setSize(doc.getSize());
+        return r;
     }
 
     private MenuItemRow toMenuRow(MenuItem m) {
@@ -190,15 +306,25 @@ public class OwnerServiceImpl implements OwnerService {
             Cafe cafe = cafeRepository.findByOwnerUsername(owner.getUsername()).orElseGet(Cafe::new);
             cafe.setOwner(owner);
             cafe.setCafeName(request.getCafeName().trim());
+            cafe.setOwnerNames(request.getOwnerNames());
+            cafe.setPocDesignation(request.getPocDesignation());
             cafe.setDescription(request.getDescription());
             cafe.setPhone(request.getPhone());
             cafe.setEmail(request.getEmail());
+            cafe.setWhatsappNumber(request.getWhatsappNumber());
             cafe.setAddressLine(request.getAddressLine());
             cafe.setCity(request.getCity());
             cafe.setState(request.getState());
             cafe.setPincode(request.getPincode());
             cafe.setOpeningTime(request.getOpeningTime());
             cafe.setClosingTime(request.getClosingTime());
+            cafe.setFssaiNumber(request.getFssaiNumber());
+            cafe.setPanNumber(request.getPanNumber());
+            cafe.setGstin(request.getGstin());
+            cafe.setShopLicenseNumber(request.getShopLicenseNumber());
+            cafe.setBankAccountNumber(request.getBankAccountNumber());
+            cafe.setBankIfsc(request.getBankIfsc());
+            cafe.setBankAccountHolderName(request.getBankAccountHolderName());
             if (request.getActive() != null) {
                 cafe.setActive(request.getActive());
             }

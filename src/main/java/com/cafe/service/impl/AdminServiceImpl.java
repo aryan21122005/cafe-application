@@ -6,12 +6,14 @@ import com.cafe.dto.AdminDocumentRow;
 import com.cafe.dto.AdminOwnerRow;
 import com.cafe.dto.AdminUserDetail;
 import com.cafe.dto.AdminUserRow;
+import com.cafe.dto.CafeDocumentRow;
 import com.cafe.dto.CafeProfileRequest;
 import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.RegisterRequest;
 import com.cafe.entity.*;
 import com.cafe.repository.CafeRepository;
 import com.cafe.repository.CafeImageRepository;
+import com.cafe.repository.CafeDocumentRepository;
 import com.cafe.repository.DocumentRepository;
 import com.cafe.repository.FunctionCapacityRepository;
 import com.cafe.repository.MenuItemRepository;
@@ -50,6 +52,9 @@ public class AdminServiceImpl implements AdminService {
 
     @Autowired
     private DocumentRepository documentRepository;
+
+    @Autowired
+    private CafeDocumentRepository cafeDocumentRepository;
 
     @Autowired
     private MenuItemRepository menuItemRepository;
@@ -97,6 +102,95 @@ public class AdminServiceImpl implements AdminService {
             }).toList();
 
             return ResponseEntity.ok(rows);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    private CafeDocumentRow toCafeDocumentRow(CafeDocument doc) {
+        CafeDocumentRow r = new CafeDocumentRow();
+        r.setId(doc.getId());
+        r.setDocKey(doc.getDocKey());
+        r.setDocumentName(doc.getDocumentName());
+        r.setDocumentType(doc.getDocumentType());
+        r.setSize(doc.getSize());
+        return r;
+    }
+
+    @Override
+    public ResponseEntity<List<CafeDocumentRow>> listCafeDocuments(Long cafeId) {
+        try {
+            if (cafeId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            List<CafeDocument> docs = cafeDocumentRepository.findByCafeId(cafeId);
+            List<CafeDocumentRow> rows = docs.stream().map(this::toCafeDocumentRow).toList();
+            return ResponseEntity.ok(rows);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<CafeDocumentRow> uploadCafeDocument(Long cafeId, String docKey, MultipartFile file) {
+        try {
+            if (cafeId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (docKey == null || docKey.isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (file == null || file.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            CafeDocument doc = cafeDocumentRepository.findByCafeIdAndDocKey(cafeId, docKey.trim()).orElseGet(CafeDocument::new);
+            doc.setCafe(cafe);
+            doc.setDocKey(docKey.trim());
+            doc.setDocumentName(file.getOriginalFilename());
+            doc.setDocumentType(file.getContentType());
+            doc.setSize(file.getSize());
+            try {
+                doc.setData(file.getBytes());
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to read uploaded document", e);
+            }
+            cafeDocumentRepository.save(doc);
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(toCafeDocumentRow(doc));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<byte[]> downloadCafeDocument(Long id) {
+        try {
+            if (id == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            CafeDocument doc = cafeDocumentRepository.findById(id).orElse(null);
+            if (doc == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            String filename = doc.getDocumentName() == null ? ("cafe-document-" + id) : doc.getDocumentName();
+            String contentType = doc.getDocumentType() == null ? MediaType.APPLICATION_OCTET_STREAM_VALUE : doc.getDocumentType();
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename.replace("\"", "") + "\"")
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .body(doc.getData());
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
@@ -313,15 +407,25 @@ public class AdminServiceImpl implements AdminService {
 
             Cafe cafe = new Cafe();
             cafe.setCafeName(request.getCafeName());
+            cafe.setOwnerNames(request.getOwnerNames());
+            cafe.setPocDesignation(request.getPocDesignation());
             cafe.setDescription(request.getDescription());
             cafe.setPhone(request.getPhone());
             cafe.setEmail(request.getEmail());
+            cafe.setWhatsappNumber(request.getWhatsappNumber());
             cafe.setAddressLine(request.getAddressLine());
             cafe.setCity(request.getCity());
             cafe.setState(request.getState());
             cafe.setPincode(request.getPincode());
             cafe.setOpeningTime(request.getOpeningTime());
             cafe.setClosingTime(request.getClosingTime());
+            cafe.setFssaiNumber(request.getFssaiNumber());
+            cafe.setPanNumber(request.getPanNumber());
+            cafe.setGstin(request.getGstin());
+            cafe.setShopLicenseNumber(request.getShopLicenseNumber());
+            cafe.setBankAccountNumber(request.getBankAccountNumber());
+            cafe.setBankIfsc(request.getBankIfsc());
+            cafe.setBankAccountHolderName(request.getBankAccountHolderName());
             cafe.setActive(request.getActive() == null ? true : request.getActive());
             cafe.setOwner(owner);
             cafeRepository.save(cafe);

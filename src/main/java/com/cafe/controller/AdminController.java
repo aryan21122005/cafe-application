@@ -8,6 +8,7 @@ import com.cafe.dto.AdminUserRow;
 import com.cafe.dto.CafeProfileRequest;
 import com.cafe.dto.RegisterRequest;
 import com.cafe.dto.MenuItemRow;
+import com.cafe.dto.CafeDocumentRow;
 import com.cafe.service.AdminService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -70,6 +71,25 @@ public class AdminController {
     @DeleteMapping("/cafes/{id}")
     public ResponseEntity<String> deleteCafe(@PathVariable Long id) {
         return adminService.deleteCafe(id);
+    }
+
+    @GetMapping("/cafes/{id}/documents")
+    public ResponseEntity<List<CafeDocumentRow>> listCafeDocuments(@PathVariable Long id) {
+        return adminService.listCafeDocuments(id);
+    }
+
+    @PostMapping(value = "/cafes/{id}/documents/{docKey}", consumes = {"multipart/form-data"})
+    public ResponseEntity<CafeDocumentRow> uploadCafeDocument(
+            @PathVariable Long id,
+            @PathVariable String docKey,
+            @RequestPart("file") MultipartFile file
+    ) {
+        return adminService.uploadCafeDocument(id, docKey, file);
+    }
+
+    @GetMapping("/cafes/documents/{id}")
+    public ResponseEntity<byte[]> downloadCafeDocument(@PathVariable Long id) {
+        return adminService.downloadCafeDocument(id);
     }
 
     @GetMapping("/users/{id}")
