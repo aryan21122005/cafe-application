@@ -1,7 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { clearSession, getSession } from '../../lib/auth.js'
-import { approveUser, createCafeForOwner, createOwner, denyUser, deleteUser, getUserDetail, listCafeMenu, listCafes, listOwners, listUsers } from '../../lib/api.js'
+import {
+  approveUser,
+  approveCafeAdmin,
+  createCafeForOwner,
+  createOwner,
+  denyUser,
+  deleteUser,
+  getCafeDetailAdmin,
+  getUserDetail,
+  listCafeMenu,
+  listCafes,
+  listOwners,
+  listUsers
+} from '../../lib/api.js'
 
 const SECTIONS = {
   overview: 'Overview',
@@ -14,6 +27,28 @@ const SECTIONS = {
   notifications: 'Notifications',
   complaints: 'Complaints / Reports',
   settings: 'System Settings'
+}
+
+function InfoIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v6" />
+      <path d="M12 7h.01" />
+    </svg>
+  )
+}
+
+function TrashIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className} aria-hidden="true">
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M6 6l1 16h10l1-16" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  )
 }
 
 export default function AdminDashboard() {
@@ -83,19 +118,49 @@ export default function AdminDashboard() {
   const [addCafeBusy, setAddCafeBusy] = useState(false)
   const [addCafeErr, setAddCafeErr] = useState('')
   const [addCafeMsg, setAddCafeMsg] = useState('')
+  const addCafeSteps = ['Owner', 'Basic & contact', 'Legal', 'Bank']
+  const [addCafeStep, setAddCafeStep] = useState(0)
   const [cafeName, setCafeName] = useState('')
+  const [cafeOwnerNames, setCafeOwnerNames] = useState('')
+  const [cafePocDesignation, setCafePocDesignation] = useState('')
   const [cafeDesc, setCafeDesc] = useState('')
   const [cafePhone, setCafePhone] = useState('')
   const [cafeEmail, setCafeEmail] = useState('')
+  const [cafeWhatsappNumber, setCafeWhatsappNumber] = useState('')
   const [cafeAddressLine, setCafeAddressLine] = useState('')
   const [cafeCity, setCafeCity] = useState('')
   const [cafeState, setCafeState] = useState('')
   const [cafePincode, setCafePincode] = useState('')
   const [cafeOpeningTime, setCafeOpeningTime] = useState('')
   const [cafeClosingTime, setCafeClosingTime] = useState('')
+  const [cafeFssaiNumber, setCafeFssaiNumber] = useState('')
+  const [cafePanNumber, setCafePanNumber] = useState('')
+  const [cafeGstin, setCafeGstin] = useState('')
+  const [cafeShopLicenseNumber, setCafeShopLicenseNumber] = useState('')
+  const [cafeBankAccountNumber, setCafeBankAccountNumber] = useState('')
+  const [cafeBankIfsc, setCafeBankIfsc] = useState('')
+  const [cafeBankAccountHolderName, setCafeBankAccountHolderName] = useState('')
   const [cafeActive, setCafeActive] = useState(true)
   const [ownerSearch, setOwnerSearch] = useState('')
   const [selectedOwnerUsername, setSelectedOwnerUsername] = useState('')
+
+  const canGoNextAddCafe = useMemo(() => {
+    if (addCafeStep === 0) return !!selectedOwnerUsername
+    if (addCafeStep === 1) {
+      return !!(cafeName.trim() && cafeCity.trim() && cafeState.trim() && cafePincode.trim())
+    }
+    return true
+  }, [addCafeStep, selectedOwnerUsername, cafeName, cafeCity, cafeState, cafePincode])
+
+  const canSubmitAddCafe = useMemo(() => {
+    return !!(
+      selectedOwnerUsername &&
+      cafeName.trim() &&
+      cafeCity.trim() &&
+      cafeState.trim() &&
+      cafePincode.trim()
+    )
+  }, [selectedOwnerUsername, cafeName, cafeCity, cafeState, cafePincode])
 
   async function refresh() {
     setLoading(true)
@@ -165,12 +230,29 @@ export default function AdminDashboard() {
     setCafeDetailError('')
     setCafeDetailLoading(true)
     try {
-      const data = await listCafeMenu(cafe.id)
-      setCafeMenu(Array.isArray(data) ? data : [])
+      const [detail, menu] = await Promise.all([getCafeDetailAdmin(cafe.id), listCafeMenu(cafe.id)])
+      setSelectedCafe(detail || cafe || null)
+      setCafeMenu(Array.isArray(menu) ? menu : [])
     } catch (e) {
-      setCafeDetailError(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to load cafe menu')
+      setCafeDetailError(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to load cafe details')
     } finally {
       setCafeDetailLoading(false)
+    }
+  }
+
+  async function onApproveCafe() {
+    if (selectedCafeId == null) return
+    setCafeDetailError('')
+    try {
+      await approveCafeAdmin(selectedCafeId)
+      await refreshCafes()
+      const detail = await getCafeDetailAdmin(selectedCafeId)
+      setSelectedCafe(detail || null)
+    } catch (e) {
+      const status = e?.response?.status
+      const data = e?.response?.data
+      const msg = typeof data === 'string' ? data : data ? JSON.stringify(data) : ''
+      setCafeDetailError(`${status ? `HTTP ${status}: ` : ''}${msg || 'Failed to approve cafe'}`)
     }
   }
 
@@ -431,15 +513,25 @@ export default function AdminDashboard() {
     try {
       const payload = {
         cafeName: cafeName.trim(),
+        ownerNames: cafeOwnerNames.trim() || null,
+        pocDesignation: cafePocDesignation.trim() || null,
         description: cafeDesc.trim() || null,
         phone: cafePhone.trim() || null,
         email: cafeEmail.trim() || null,
+        whatsappNumber: cafeWhatsappNumber.trim() || null,
         addressLine: cafeAddressLine.trim() || null,
         city: cafeCity.trim(),
         state: cafeState.trim(),
         pincode: cafePincode.trim(),
         openingTime: cafeOpeningTime || null,
         closingTime: cafeClosingTime || null,
+        fssaiNumber: cafeFssaiNumber.trim() || null,
+        panNumber: cafePanNumber.trim() || null,
+        gstin: cafeGstin.trim() || null,
+        shopLicenseNumber: cafeShopLicenseNumber.trim() || null,
+        bankAccountNumber: cafeBankAccountNumber.trim() || null,
+        bankIfsc: cafeBankIfsc.trim() || null,
+        bankAccountHolderName: cafeBankAccountHolderName.trim() || null,
         active: !!cafeActive
       }
 
@@ -449,22 +541,37 @@ export default function AdminDashboard() {
       await refreshOwners()
 
       setCafeName('')
+      setCafeOwnerNames('')
+      setCafePocDesignation('')
       setCafeDesc('')
       setCafePhone('')
       setCafeEmail('')
+      setCafeWhatsappNumber('')
       setCafeAddressLine('')
       setCafeCity('')
       setCafeState('')
       setCafePincode('')
       setCafeOpeningTime('')
       setCafeClosingTime('')
+      setCafeFssaiNumber('')
+      setCafePanNumber('')
+      setCafeGstin('')
+      setCafeShopLicenseNumber('')
+      setCafeBankAccountNumber('')
+      setCafeBankIfsc('')
+      setCafeBankAccountHolderName('')
       setCafeActive(true)
       setOwnerSearch('')
       setSelectedOwnerUsername('')
 
+      setAddCafeStep(0)
+
       setShowAddCafe(false)
     } catch (e) {
-      setAddCafeErr(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to create cafe')
+      const status = e?.response?.status
+      const data = e?.response?.data
+      const msg = typeof data === 'string' ? data : data ? JSON.stringify(data) : ''
+      setAddCafeErr(`${status ? `HTTP ${status}: ` : ''}${msg || 'Failed to create cafe'}`)
     } finally {
       setAddCafeBusy(false)
     }
@@ -1055,15 +1162,16 @@ export default function AdminDashboard() {
                         {Array.isArray(u.documents) && u.documents.length > 0 ? (
                           <div className="flex flex-col gap-1">
                             {u.documents.map((d) => (
-                              <a
+                              <button
                                 key={d.id}
-                                className="text-emerald-700 hover:underline"
-                                href={`/api/admin/documents/${d.id}`}
-                                target="_blank"
-                                rel="noreferrer"
+                                type="button"
+                                className="inline-flex items-center gap-2 text-left text-emerald-700 hover:underline"
+                                onClick={() => window.open(`/api/admin/documents/${d.id}`, '_blank', 'noreferrer')}
+                                aria-label={`View document ${d.documentName || d.id}`}
                               >
-                                {d.documentName || `Document ${d.id}`}
-                              </a>
+                                <InfoIcon className="h-4 w-4" />
+                                <span>{d.documentName || `Document ${d.id}`}</span>
+                              </button>
                             ))}
                           </div>
                         ) : (
@@ -1097,8 +1205,9 @@ export default function AdminDashboard() {
                             className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
                             disabled={actionBusyId === u.id}
                             onClick={() => onDeleteUser(u.id)}
+                            aria-label="Delete user"
                           >
-                            Delete
+                            <TrashIcon className="h-4 w-4" />
                           </button>
                         </div>
                       </td>
@@ -1467,15 +1576,16 @@ export default function AdminDashboard() {
                       {Array.isArray(selectedUser.documents) && selectedUser.documents.length > 0 ? (
                         <div className="mt-2 flex flex-col gap-2">
                           {selectedUser.documents.map((d) => (
-                            <a
+                            <button
                               key={d.id}
-                              className="text-sm font-semibold text-emerald-700 hover:underline"
-                              href={`/api/admin/documents/${d.id}`}
-                              target="_blank"
-                              rel="noreferrer"
+                              type="button"
+                              className="inline-flex items-center gap-2 text-left text-sm font-semibold text-emerald-700 hover:underline"
+                              onClick={() => window.open(`/api/admin/documents/${d.id}`, '_blank', 'noreferrer')}
+                              aria-label={`View document ${d.documentName || d.id}`}
                             >
-                              {d.documentName || `Document ${d.id}`}
-                            </a>
+                              <InfoIcon className="h-4 w-4" />
+                              <span>{d.documentName || `Document ${d.id}`}</span>
+                            </button>
                           ))}
                         </div>
                       ) : (
@@ -1502,6 +1612,9 @@ export default function AdminDashboard() {
                       {selectedCafe?.ownerUsername ? `Owner: ${selectedCafe.ownerUsername}` : ''}
                       {selectedCafe?.city || selectedCafe?.state ? ` • ${selectedCafe.city || ''}${selectedCafe.city && selectedCafe.state ? ', ' : ''}${selectedCafe.state || ''}` : ''}
                       {typeof selectedCafe?.active === 'boolean' ? ` • ${selectedCafe.active ? 'Active' : 'Inactive'}` : ''}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-600">
+                      Approval: <span className="font-semibold">{selectedCafe?.approvalStatus || 'PENDING'}</span>
                     </div>
                   </div>
                   <button type="button" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" onClick={closeCafeDetail}>
@@ -1546,6 +1659,19 @@ export default function AdminDashboard() {
                     ) : (
                       <div className="mt-2 text-sm text-slate-600">No menu items found for this cafe.</div>
                     )}
+                  </div>
+                ) : null}
+
+                {String(selectedCafe?.approvalStatus || '').toUpperCase() !== 'APPROVED' ? (
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+                      disabled={cafeDetailLoading}
+                      onClick={onApproveCafe}
+                    >
+                      Approve cafe
+                    </button>
                   </div>
                 ) : null}
               </div>
@@ -1751,62 +1877,112 @@ export default function AdminDashboard() {
                 {addCafeErr ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{addCafeErr}</div> : null}
                 {addCafeMsg ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{addCafeMsg}</div> : null}
 
-                <div className="mt-5 grid gap-4">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-sm font-semibold">Select owner *</div>
-                    <input
-                      className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
-                      placeholder="Search owner by username/email"
-                      value={ownerSearch}
-                      onChange={(e) => setOwnerSearch(e.target.value)}
-                    />
-                    <select
-                      className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
-                      value={selectedOwnerUsername}
-                      onChange={(e) => setSelectedOwnerUsername(e.target.value)}
-                    >
-                      <option value="">Select owner</option>
-                      {owners
-                        .filter((o) => {
-                          const q = ownerSearch.trim().toLowerCase()
-                          if (!q) return true
-                          return String(o.username || '').toLowerCase().includes(q) || String(o.email || '').toLowerCase().includes(q)
-                        })
-                        .map((o) => (
-                          <option key={o.id} value={o.username}>
-                            {o.username} {o.email ? `(${o.email})` : ''} {o.hasCafe ? '• has cafe' : ''}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
+                <div className="mt-5">
+                  <div className="text-sm font-semibold">Step {addCafeStep + 1} of {addCafeSteps.length}: {addCafeSteps[addCafeStep]}</div>
+                </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                {addCafeStep === 0 ? (
+                  <div className="mt-5 grid gap-4">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="text-sm font-semibold">Select owner *</div>
+                      <input
+                        className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                        placeholder="Search owner by username/email"
+                        value={ownerSearch}
+                        onChange={(e) => setOwnerSearch(e.target.value)}
+                      />
+                      <select
+                        className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                        value={selectedOwnerUsername}
+                        onChange={(e) => setSelectedOwnerUsername(e.target.value)}
+                      >
+                        <option value="">Select owner</option>
+                        {owners
+                          .filter((o) => {
+                            const q = ownerSearch.trim().toLowerCase()
+                            if (!q) return true
+                            return String(o.username || '').toLowerCase().includes(q) || String(o.email || '').toLowerCase().includes(q)
+                          })
+                          .map((o) => (
+                            <option key={o.id} value={o.username}>
+                              {o.username} {o.email ? `(${o.email})` : ''} {o.hasCafe ? '• has cafe' : ''}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
+                ) : null}
+
+                {addCafeStep === 1 ? (
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
                     <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Cafe name *" value={cafeName} onChange={(e) => setCafeName(e.target.value)} />
-                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Phone" value={cafePhone} onChange={(e) => setCafePhone(e.target.value)} />
-                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm md:col-span-2" placeholder="Description" value={cafeDesc} onChange={(e) => setCafeDesc(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Owner name(s)" value={cafeOwnerNames} onChange={(e) => setCafeOwnerNames(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Mobile" value={cafePhone} onChange={(e) => setCafePhone(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="WhatsApp number" value={cafeWhatsappNumber} onChange={(e) => setCafeWhatsappNumber(e.target.value)} />
                     <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Email" value={cafeEmail} onChange={(e) => setCafeEmail(e.target.value)} />
-                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Address line" value={cafeAddressLine} onChange={(e) => setCafeAddressLine(e.target.value)} />
-                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="City" value={cafeCity} onChange={(e) => setCafeCity(e.target.value)} />
-                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="State" value={cafeState} onChange={(e) => setCafeState(e.target.value)} />
-                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Pincode" value={cafePincode} onChange={(e) => setCafePincode(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="POC designation" value={cafePocDesignation} onChange={(e) => setCafePocDesignation(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm md:col-span-2" placeholder="Description" value={cafeDesc} onChange={(e) => setCafeDesc(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm md:col-span-2" placeholder="Full address" value={cafeAddressLine} onChange={(e) => setCafeAddressLine(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="City *" value={cafeCity} onChange={(e) => setCafeCity(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="State *" value={cafeState} onChange={(e) => setCafeState(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Pincode *" value={cafePincode} onChange={(e) => setCafePincode(e.target.value)} />
                     <input type="time" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" value={cafeOpeningTime} onChange={(e) => setCafeOpeningTime(e.target.value)} />
                     <input type="time" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" value={cafeClosingTime} onChange={(e) => setCafeClosingTime(e.target.value)} />
-                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <label className="flex items-center gap-2 text-sm text-slate-700 md:col-span-2">
                       <input type="checkbox" checked={cafeActive} onChange={(e) => setCafeActive(e.target.checked)} />
                       Active
                     </label>
                   </div>
-                </div>
+                ) : null}
 
-                <div className="mt-5 flex justify-end">
+                {addCafeStep === 2 ? (
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="FSSAI number" value={cafeFssaiNumber} onChange={(e) => setCafeFssaiNumber(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="PAN number" value={cafePanNumber} onChange={(e) => setCafePanNumber(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="GSTIN" value={cafeGstin} onChange={(e) => setCafeGstin(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Shop/Establishment license number" value={cafeShopLicenseNumber} onChange={(e) => setCafeShopLicenseNumber(e.target.value)} />
+                  </div>
+                ) : null}
+
+                {addCafeStep === 3 ? (
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Bank account number" value={cafeBankAccountNumber} onChange={(e) => setCafeBankAccountNumber(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="IFSC" value={cafeBankIfsc} onChange={(e) => setCafeBankIfsc(e.target.value)} />
+                    <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm md:col-span-2" placeholder="Account holder name" value={cafeBankAccountHolderName} onChange={(e) => setCafeBankAccountHolderName(e.target.value)} />
+                  </div>
+                ) : null}
+
+                <div className="mt-6 flex items-center justify-between gap-3">
                   <button
                     type="button"
-                    className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
-                    disabled={addCafeBusy}
-                    onClick={onCreateCafe}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm disabled:opacity-50"
+                    disabled={addCafeBusy || addCafeStep === 0}
+                    onClick={() => setAddCafeStep((s) => Math.max(0, s - 1))}
                   >
-                    {addCafeBusy ? 'Creating...' : 'Create cafe'}
+                    Back
                   </button>
+
+                  <div className="flex gap-2">
+                    {addCafeStep < addCafeSteps.length - 1 ? (
+                      <button
+                        type="button"
+                        className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                        disabled={addCafeBusy || !canGoNextAddCafe}
+                        onClick={() => setAddCafeStep((s) => Math.min(addCafeSteps.length - 1, s + 1))}
+                      >
+                        Next
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                        disabled={addCafeBusy || !canSubmitAddCafe}
+                        onClick={onCreateCafe}
+                      >
+                        {addCafeBusy ? 'Creating...' : 'Create cafe'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

@@ -5,13 +5,13 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class AdminCafeRow {
+public class PublicCafeCardRow {
 
     private Long id;
     private String cafeName;
-    private Boolean active;
-    private String approvalStatus;
-    private String ownerUsername;
     private String city;
     private String state;
+    private Boolean active;
+    private String approvalStatus;
+    private String coverImageUrl;
 }

@@ -10,6 +10,8 @@ import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.OwnerStaffCreateRequest;
 import com.cafe.dto.OwnerStaffRow;
 import com.cafe.dto.CafeDocumentRow;
+import com.cafe.dto.CafeBookingRow;
+import com.cafe.dto.CafeOrderRow;
 import com.cafe.service.OwnerService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -33,12 +35,22 @@ public class OwnerController {
         return ownerService.getCafe(ownerUsername);
     }
 
-    @PutMapping("/cafe")
+    @PutMapping(value = "/cafe", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<CafeProfileResponse> upsertCafe(
             @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
             @RequestBody CafeProfileRequest request
     ) {
         return ownerService.upsertCafe(ownerUsername, request);
+    }
+
+    @PutMapping(value = "/cafe", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<CafeProfileResponse> upsertCafeWithDocuments(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
+            @RequestPart("data") CafeProfileRequest request,
+            @RequestPart(value = "docKeys", required = false) List<String> docKeys,
+            @RequestPart(value = "documents", required = false) List<MultipartFile> documents
+    ) {
+        return ownerService.upsertCafeWithDocuments(ownerUsername, request, docKeys, documents);
     }
 
     @DeleteMapping("/cafe")
@@ -190,5 +202,19 @@ public class OwnerController {
             @PathVariable Long id
     ) {
         return ownerService.deleteImage(ownerUsername, id);
+    }
+
+    @GetMapping("/bookings")
+    public ResponseEntity<List<CafeBookingRow>> listBookings(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername
+    ) {
+        return ownerService.listBookings(ownerUsername);
+    }
+
+    @GetMapping("/orders")
+    public ResponseEntity<List<CafeOrderRow>> listOrders(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername
+    ) {
+        return ownerService.listOrders(ownerUsername);
     }
 }

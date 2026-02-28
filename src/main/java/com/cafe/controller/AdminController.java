@@ -6,6 +6,7 @@ import com.cafe.dto.AdminOwnerRow;
 import com.cafe.dto.AdminUserDetail;
 import com.cafe.dto.AdminUserRow;
 import com.cafe.dto.CafeProfileRequest;
+import com.cafe.dto.CafeProfileResponse;
 import com.cafe.dto.RegisterRequest;
 import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.CafeDocumentRow;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
@@ -42,6 +44,16 @@ public class AdminController {
         return adminService.listCafes();
     }
 
+    @GetMapping("/cafes/{id}")
+    public ResponseEntity<CafeProfileResponse> getCafeDetail(@PathVariable Long id) {
+        return adminService.getCafeDetail(id);
+    }
+
+    @PutMapping("/cafes/{id}/approve")
+    public ResponseEntity<AdminCafeRow> approveCafe(@PathVariable Long id) {
+        return adminService.approveCafe(id);
+    }
+
     @GetMapping("/owners")
     public ResponseEntity<List<AdminOwnerRow>> listOwners() {
         return adminService.listOwners();
@@ -55,7 +67,7 @@ public class AdminController {
         return adminService.createOwner(request, documents);
     }
 
-    @PostMapping("/cafes")
+    @PostMapping(value = "/cafes", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<AdminCafeRow> createCafeForOwner(
             @RequestHeader(value = "X-OWNER-USERNAME", required = false) String ownerUsername,
             @RequestBody CafeProfileRequest request

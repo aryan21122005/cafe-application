@@ -61,6 +61,23 @@ export async function createCafeForOwner(ownerUsername, payload) {
   return res.data
 }
 
+export async function createCafeForOwnerWithDocuments(ownerUsername, payload, docKeys, documents) {
+  const fd = new FormData()
+  fd.append('data', new Blob([JSON.stringify(payload)], { type: 'application/json' }))
+  for (const k of docKeys || []) {
+    fd.append('docKeys', k)
+  }
+  for (const f of documents || []) {
+    fd.append('documents', f)
+  }
+  const res = await api.post('/api/admin/cafes', fd, {
+    headers: {
+      'X-OWNER-USERNAME': ownerUsername
+    }
+  })
+  return res.data
+}
+
 export async function deleteCafeAdmin(id) {
   const res = await api.delete(`/api/admin/cafes/${id}`)
   return res.data
@@ -68,6 +85,49 @@ export async function deleteCafeAdmin(id) {
 
 export async function listCafeMenu(cafeId) {
   const res = await api.get(`/api/admin/cafes/${cafeId}/menu`)
+  return res.data
+}
+
+export async function getCafeDetailAdmin(cafeId) {
+  const res = await api.get(`/api/admin/cafes/${cafeId}`)
+  return res.data
+}
+
+export async function approveCafeAdmin(cafeId) {
+  const res = await api.put(`/api/admin/cafes/${cafeId}/approve`)
+  return res.data
+}
+
+export async function listPublicCafes() {
+  const res = await api.get('/api/public/cafes')
+  return res.data
+}
+
+export async function getPublicCafeDetail(cafeId) {
+  const res = await api.get(`/api/public/cafes/${cafeId}`)
+  return res.data
+}
+
+export async function listPublicCafeMenu(cafeId) {
+  const res = await api.get(`/api/public/cafes/${cafeId}/menu`)
+  return res.data
+}
+
+export async function createCustomerBooking(username, cafeId, payload) {
+  const res = await api.post(`/api/customer/cafes/${cafeId}/bookings`, payload, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function createCustomerOrder(username, cafeId, payload) {
+  const res = await api.post(`/api/customer/cafes/${cafeId}/orders`, payload, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
   return res.data
 }
 
@@ -105,8 +165,43 @@ export async function getOwnerCafe(username) {
   return res.data
 }
 
+export async function listOwnerBookings(username) {
+  const res = await api.get('/api/owner/bookings', {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function listOwnerOrders(username) {
+  const res = await api.get('/api/owner/orders', {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
 export async function upsertOwnerCafe(username, payload) {
   const res = await api.put('/api/owner/cafe', payload, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function upsertOwnerCafeWithDocuments(username, payload, docKeys, documents) {
+  const fd = new FormData()
+  fd.append('data', new Blob([JSON.stringify(payload)], { type: 'application/json' }))
+  for (const k of docKeys || []) {
+    fd.append('docKeys', k)
+  }
+  for (const f of documents || []) {
+    fd.append('documents', f)
+  }
+  const res = await api.put('/api/owner/cafe', fd, {
     headers: {
       'X-USERNAME': username
     }
@@ -142,8 +237,7 @@ export async function createOwnerStaff(username, payload, documents) {
 
     const res = await api.post('/api/owner/staff', fd, {
       headers: {
-        'X-USERNAME': username,
-        'Content-Type': 'multipart/form-data'
+        'X-USERNAME': username
       }
     })
     return res.data

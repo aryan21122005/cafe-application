@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.cafe.entity.CafeDocument;
+import com.cafe.entity.ApprovalStatus;
 
 @Getter
 @Setter
@@ -64,6 +65,10 @@ public class Cafe {
 
     @Column(nullable = false)
     private Boolean active = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ApprovalStatus approvalStatus = ApprovalStatus.PENDING;
 
     @OneToOne(optional = false)
     @JoinColumn(name = "owner_id", unique = true)

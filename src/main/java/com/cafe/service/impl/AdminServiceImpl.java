@@ -8,6 +8,7 @@ import com.cafe.dto.AdminUserDetail;
 import com.cafe.dto.AdminUserRow;
 import com.cafe.dto.CafeDocumentRow;
 import com.cafe.dto.CafeProfileRequest;
+import com.cafe.dto.CafeProfileResponse;
 import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.RegisterRequest;
 import com.cafe.entity.*;
@@ -427,6 +428,7 @@ public class AdminServiceImpl implements AdminService {
             cafe.setBankIfsc(request.getBankIfsc());
             cafe.setBankAccountHolderName(request.getBankAccountHolderName());
             cafe.setActive(request.getActive() == null ? true : request.getActive());
+            cafe.setApprovalStatus(ApprovalStatus.APPROVED);
             cafe.setOwner(owner);
             cafeRepository.save(cafe);
 
@@ -434,6 +436,7 @@ public class AdminServiceImpl implements AdminService {
             row.setId(cafe.getId());
             row.setCafeName(cafe.getCafeName());
             row.setActive(cafe.getActive());
+            row.setApprovalStatus(cafe.getApprovalStatus() == null ? null : cafe.getApprovalStatus().name());
             row.setOwnerUsername(owner.getUsername());
             row.setCity(cafe.getCity());
             row.setState(cafe.getState());
@@ -483,6 +486,7 @@ public class AdminServiceImpl implements AdminService {
                 r.setId(c.getId());
                 r.setCafeName(c.getCafeName());
                 r.setActive(c.getActive());
+                r.setApprovalStatus(c.getApprovalStatus() == null ? null : c.getApprovalStatus().name());
                 r.setOwnerUsername(c.getOwner() == null ? null : c.getOwner().getUsername());
                 r.setCity(c.getCity());
                 r.setState(c.getState());
@@ -492,6 +496,78 @@ public class AdminServiceImpl implements AdminService {
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+    }
+
+    @Override
+    public ResponseEntity<CafeProfileResponse> getCafeDetail(Long cafeId) {
+        try {
+            if (cafeId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            return ResponseEntity.ok(toCafeResponse(cafe));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<AdminCafeRow> approveCafe(Long cafeId) {
+        try {
+            if (cafeId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            cafe.setApprovalStatus(ApprovalStatus.APPROVED);
+            cafeRepository.save(cafe);
+
+            AdminCafeRow r = new AdminCafeRow();
+            r.setId(cafe.getId());
+            r.setCafeName(cafe.getCafeName());
+            r.setActive(cafe.getActive());
+            r.setApprovalStatus(cafe.getApprovalStatus() == null ? null : cafe.getApprovalStatus().name());
+            r.setOwnerUsername(cafe.getOwner() == null ? null : cafe.getOwner().getUsername());
+            r.setCity(cafe.getCity());
+            r.setState(cafe.getState());
+            return ResponseEntity.ok(r);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    private CafeProfileResponse toCafeResponse(Cafe cafe) {
+        CafeProfileResponse r = new CafeProfileResponse();
+        r.setId(cafe.getId());
+        r.setCafeName(cafe.getCafeName());
+        r.setOwnerNames(cafe.getOwnerNames());
+        r.setPocDesignation(cafe.getPocDesignation());
+        r.setDescription(cafe.getDescription());
+        r.setPhone(cafe.getPhone());
+        r.setEmail(cafe.getEmail());
+        r.setWhatsappNumber(cafe.getWhatsappNumber());
+        r.setAddressLine(cafe.getAddressLine());
+        r.setCity(cafe.getCity());
+        r.setState(cafe.getState());
+        r.setPincode(cafe.getPincode());
+        r.setOpeningTime(cafe.getOpeningTime());
+        r.setClosingTime(cafe.getClosingTime());
+        r.setFssaiNumber(cafe.getFssaiNumber());
+        r.setPanNumber(cafe.getPanNumber());
+        r.setGstin(cafe.getGstin());
+        r.setShopLicenseNumber(cafe.getShopLicenseNumber());
+        r.setBankAccountNumber(cafe.getBankAccountNumber());
+        r.setBankIfsc(cafe.getBankIfsc());
+        r.setBankAccountHolderName(cafe.getBankAccountHolderName());
+        r.setActive(cafe.getActive());
+        r.setApprovalStatus(cafe.getApprovalStatus() == null ? null : cafe.getApprovalStatus().name());
+        r.setOwnerUsername(cafe.getOwner() == null ? null : cafe.getOwner().getUsername());
+        return r;
     }
 
     @Override

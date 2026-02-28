@@ -41,5 +41,7 @@ public class CafeProfileResponse {
     private String bankAccountHolderName;
     private Boolean active;
 
+    private String approvalStatus;
+
     private String ownerUsername;
 }

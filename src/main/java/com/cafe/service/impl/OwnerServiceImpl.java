@@ -10,10 +10,16 @@ import com.cafe.dto.MenuItemRequest;
 import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.OwnerStaffCreateRequest;
 import com.cafe.dto.OwnerStaffRow;
+import com.cafe.dto.CafeBookingRow;
+import com.cafe.dto.CafeOrderRow;
+import com.cafe.dto.CafeOrderItemRow;
 import com.cafe.entity.ApprovalStatus;
 import com.cafe.entity.Cafe;
 import com.cafe.entity.CafeDocument;
 import com.cafe.entity.CafeImage;
+import com.cafe.entity.CafeBooking;
+import com.cafe.entity.CafeOrder;
+import com.cafe.entity.CafeOrderItem;
 import com.cafe.entity.FunctionCapacity;
 import com.cafe.entity.FunctionType;
 import com.cafe.entity.MenuItem;
@@ -29,6 +35,8 @@ import com.cafe.repository.CafeImageRepository;
 import com.cafe.repository.FunctionCapacityRepository;
 import com.cafe.repository.MenuItemRepository;
 import com.cafe.repository.UserRepository;
+import com.cafe.repository.CafeBookingRepository;
+import com.cafe.repository.CafeOrderRepository;
 import com.cafe.service.EmailService;
 import com.cafe.service.OwnerService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -76,6 +84,12 @@ public class OwnerServiceImpl implements OwnerService {
     private CafeDocumentRepository cafeDocumentRepository;
 
     @Autowired
+    private CafeBookingRepository cafeBookingRepository;
+
+    @Autowired
+    private CafeOrderRepository cafeOrderRepository;
+
+    @Autowired
     private BCryptPasswordEncoder passwordEncoder;
 
     @Autowired(required = false)
@@ -105,6 +119,119 @@ public class OwnerServiceImpl implements OwnerService {
             List<CafeDocument> docs = cafeDocumentRepository.findByCafeId(cafe.getId());
             List<CafeDocumentRow> rows = docs.stream().map(this::toCafeDocumentRow).toList();
             return ResponseEntity.ok(rows);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<List<CafeBookingRow>> listBookings(String ownerUsername) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            List<CafeBooking> list = cafeBookingRepository.findByCafeIdOrderByCreatedAtDesc(cafe.getId());
+            List<CafeBookingRow> rows = list.stream().map(this::toBookingRow).toList();
+            return ResponseEntity.ok(rows);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<List<CafeOrderRow>> listOrders(String ownerUsername) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            List<CafeOrder> list = cafeOrderRepository.findByCafeIdOrderByCreatedAtDesc(cafe.getId());
+            List<CafeOrderRow> rows = list.stream().map(this::toOrderRow).toList();
+            return ResponseEntity.ok(rows);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<CafeProfileResponse> upsertCafeWithDocuments(String ownerUsername, CafeProfileRequest request, List<String> docKeys, List<MultipartFile> documents) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+
+            if (request == null || request.getCafeName() == null || request.getCafeName().isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            if ((documents != null && !documents.isEmpty()) || (docKeys != null && !docKeys.isEmpty())) {
+                if (documents == null || docKeys == null || documents.size() != docKeys.size()) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+                }
+            }
+
+            Cafe cafe = cafeRepository.findByOwnerUsername(owner.getUsername()).orElseGet(Cafe::new);
+            cafe.setOwner(owner);
+            cafe.setCafeName(request.getCafeName().trim());
+            cafe.setOwnerNames(request.getOwnerNames());
+            cafe.setPocDesignation(request.getPocDesignation());
+            cafe.setDescription(request.getDescription());
+            cafe.setPhone(request.getPhone());
+            cafe.setEmail(request.getEmail());
+            cafe.setWhatsappNumber(request.getWhatsappNumber());
+            cafe.setAddressLine(request.getAddressLine());
+            cafe.setCity(request.getCity());
+            cafe.setState(request.getState());
+            cafe.setPincode(request.getPincode());
+            cafe.setOpeningTime(request.getOpeningTime());
+            cafe.setClosingTime(request.getClosingTime());
+            cafe.setFssaiNumber(request.getFssaiNumber());
+            cafe.setPanNumber(request.getPanNumber());
+            cafe.setGstin(request.getGstin());
+            cafe.setShopLicenseNumber(request.getShopLicenseNumber());
+            cafe.setBankAccountNumber(request.getBankAccountNumber());
+            cafe.setBankIfsc(request.getBankIfsc());
+            cafe.setBankAccountHolderName(request.getBankAccountHolderName());
+            if (request.getActive() != null) {
+                cafe.setActive(request.getActive());
+            }
+
+            cafeRepository.save(cafe);
+
+            if (documents != null && !documents.isEmpty()) {
+                for (int i = 0; i < documents.size(); i++) {
+                    String docKey = docKeys.get(i);
+                    MultipartFile file = documents.get(i);
+                    if (docKey == null || docKey.isBlank() || file == null || file.isEmpty()) {
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+                    }
+
+                    CafeDocument doc = cafeDocumentRepository.findByCafeIdAndDocKey(cafe.getId(), docKey.trim()).orElseGet(CafeDocument::new);
+                    doc.setCafe(cafe);
+                    doc.setDocKey(docKey.trim());
+                    doc.setDocumentName(file.getOriginalFilename());
+                    doc.setDocumentType(file.getContentType());
+                    doc.setSize(file.getSize());
+                    try {
+                        doc.setData(file.getBytes());
+                    } catch (IOException e) {
+                        throw new RuntimeException("Failed to read uploaded document", e);
+                    }
+                    cafeDocumentRepository.save(doc);
+                }
+            }
+
+            return ResponseEntity.ok(toCafeResponse(cafe));
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
@@ -217,6 +344,7 @@ public class OwnerServiceImpl implements OwnerService {
         res.setBankIfsc(cafe.getBankIfsc());
         res.setBankAccountHolderName(cafe.getBankAccountHolderName());
         res.setActive(cafe.getActive());
+        res.setApprovalStatus(cafe.getApprovalStatus() == null ? null : cafe.getApprovalStatus().name());
         res.setOwnerUsername(cafe.getOwner() == null ? null : cafe.getOwner().getUsername());
         return res;
     }
@@ -233,6 +361,47 @@ public class OwnerServiceImpl implements OwnerService {
         r.setDocumentName(doc.getDocumentName());
         r.setDocumentType(doc.getDocumentType());
         r.setSize(doc.getSize());
+        return r;
+    }
+
+    private CafeBookingRow toBookingRow(CafeBooking b) {
+        CafeBookingRow r = new CafeBookingRow();
+        r.setId(b.getId());
+        r.setCafeId(b.getCafe() == null ? null : b.getCafe().getId());
+        r.setCafeName(b.getCafe() == null ? null : b.getCafe().getCafeName());
+        r.setCustomerName(b.getCustomerName());
+        r.setCustomerPhone(b.getCustomerPhone());
+        r.setBookingDate(b.getBookingDate());
+        r.setBookingTime(b.getBookingTime());
+        r.setGuests(b.getGuests());
+        r.setNote(b.getNote());
+        r.setStatus(b.getStatus());
+        r.setCreatedAt(b.getCreatedAt());
+        return r;
+    }
+
+    private CafeOrderRow toOrderRow(CafeOrder o) {
+        CafeOrderRow r = new CafeOrderRow();
+        r.setId(o.getId());
+        r.setCafeId(o.getCafe() == null ? null : o.getCafe().getId());
+        r.setCafeName(o.getCafe() == null ? null : o.getCafe().getCafeName());
+        r.setCustomerName(o.getCustomerName());
+        r.setCustomerPhone(o.getCustomerPhone());
+        r.setStatus(o.getStatus());
+        r.setTotalAmount(o.getTotalAmount());
+        r.setCreatedAt(o.getCreatedAt());
+        if (o.getItems() != null) {
+            r.setItems(o.getItems().stream().map(this::toOrderItemRow).toList());
+        }
+        return r;
+    }
+
+    private CafeOrderItemRow toOrderItemRow(CafeOrderItem it) {
+        CafeOrderItemRow r = new CafeOrderItemRow();
+        r.setMenuItemId(it.getMenuItemId());
+        r.setItemName(it.getItemName());
+        r.setPrice(it.getPrice());
+        r.setQty(it.getQty());
         return r;
     }
 
@@ -327,6 +496,10 @@ public class OwnerServiceImpl implements OwnerService {
             cafe.setBankAccountHolderName(request.getBankAccountHolderName());
             if (request.getActive() != null) {
                 cafe.setActive(request.getActive());
+            }
+
+            if (cafe.getApprovalStatus() == null) {
+                cafe.setApprovalStatus(ApprovalStatus.PENDING);
             }
 
             cafeRepository.save(cafe);

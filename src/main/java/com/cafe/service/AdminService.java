@@ -4,6 +4,7 @@ import com.cafe.dto.AdminDecisionRequest;
 import com.cafe.dto.AdminCafeRow;
 import com.cafe.dto.AdminUserDetail;
 import com.cafe.dto.AdminUserRow;
+import com.cafe.dto.CafeProfileResponse;
 import com.cafe.dto.RegisterRequest;
 import com.cafe.dto.CafeProfileRequest;
 import com.cafe.dto.AdminOwnerRow;
@@ -25,6 +26,10 @@ public interface AdminService {
     ResponseEntity<String> createOwner(RegisterRequest request, List<MultipartFile> documents);
 
     ResponseEntity<AdminCafeRow> createCafeForOwner(String ownerUsername, CafeProfileRequest request);
+
+    ResponseEntity<CafeProfileResponse> getCafeDetail(Long cafeId);
+
+    ResponseEntity<AdminCafeRow> approveCafe(Long cafeId);
 
     ResponseEntity<List<MenuItemRow>> listCafeMenu(Long cafeId);
 

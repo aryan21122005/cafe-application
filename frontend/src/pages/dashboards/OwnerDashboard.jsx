@@ -9,9 +9,11 @@ import {
   deleteOwnerImage,
   deleteOwnerMenuItem,
   getOwnerCafe,
+  listOwnerBookings,
   listOwnerCapacities,
   listOwnerImages,
   listOwnerMenu,
+  listOwnerOrders,
   listOwnerStaff,
   uploadOwnerMenuItemImage,
   updateOwnerMenuItem,
@@ -32,6 +34,11 @@ function Field({ label, children }) {
 function ProfileSection({
   cafe,
   setCafe,
+  cafeSteps = ['Basic & contact', 'Legal', 'Bank'],
+  cafeStep = 0,
+  setCafeStep = () => {},
+  canGoNextCafe = true,
+  canSubmitCafe = true,
   cafeLoading,
   cafeErr,
   cafeMsg,
@@ -70,7 +77,7 @@ function ProfileSection({
             type="button"
             className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
             onClick={onSaveCafe}
-            disabled={cafeLoading || !canSaveCafe}
+            disabled={cafeLoading || !canSaveCafe || !canSubmitCafe}
           >
             Save
           </button>
@@ -81,111 +88,253 @@ function ProfileSection({
       {cafeMsg ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{cafeMsg}</div> : null}
       {cafeLoading ? <div className="mt-4 text-sm text-slate-600">Loading...</div> : null}
 
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <Field label="Cafe name *">
-          <input
-            className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-            value={cafe?.cafeName || ''}
-            onChange={(e) => setCafe((c) => ({ ...(c || {}), cafeName: e.target.value }))}
-            placeholder="Digital Cafe"
-          />
-        </Field>
-        <Field label="Active">
-          <select
-            className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-            value={String(cafe?.active ?? true)}
-            onChange={(e) => setCafe((c) => ({ ...(c || {}), active: e.target.value === 'true' }))}
-          >
-            <option value="true">Active</option>
-            <option value="false">Inactive</option>
-          </select>
-        </Field>
+      <div className="mt-5">
+        <div className="text-sm font-semibold">Step {cafeStep + 1} of {cafeSteps.length}: {cafeSteps[cafeStep]}</div>
+      </div>
 
-        <Field label="Phone">
-          <input
-            className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-            value={cafe?.phone || ''}
-            onChange={(e) => setCafe((c) => ({ ...(c || {}), phone: e.target.value }))}
-            placeholder="Cafe contact"
-          />
-        </Field>
-        <Field label="Email">
-          <input
-            className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-            value={cafe?.email || ''}
-            onChange={(e) => setCafe((c) => ({ ...(c || {}), email: e.target.value }))}
-            placeholder="cafe@email.com"
-          />
-        </Field>
-
-        <div className="md:col-span-2">
-          <Field label="Description">
-            <textarea
-              className="min-h-[90px] w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-              value={cafe?.description || ''}
-              onChange={(e) => setCafe((c) => ({ ...(c || {}), description: e.target.value }))}
-              placeholder="About your cafe..."
-            />
-          </Field>
-        </div>
-
-        <div className="md:col-span-2">
-          <Field label="Address line">
+      {cafeStep === 0 ? (
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <Field label="Cafe name *">
             <input
-              className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-              value={cafe?.addressLine || ''}
-              onChange={(e) => setCafe((c) => ({ ...(c || {}), addressLine: e.target.value }))}
-              placeholder="Street / landmark"
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.cafeName || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), cafeName: e.target.value }))}
+              placeholder="Digital Cafe"
+            />
+          </Field>
+          <Field label="Active">
+            <select
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={String(cafe?.active ?? true)}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), active: e.target.value === 'true' }))}
+            >
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
+            </select>
+          </Field>
+
+          <Field label="Owner name(s)">
+            <input
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.ownerNames || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), ownerNames: e.target.value }))}
+              placeholder="Owner / partners"
+            />
+          </Field>
+          <Field label="POC designation">
+            <input
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.pocDesignation || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), pocDesignation: e.target.value }))}
+              placeholder="Manager / Owner"
+            />
+          </Field>
+
+          <Field label="Mobile">
+            <input
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.phone || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), phone: e.target.value }))}
+              placeholder="Cafe contact"
+            />
+          </Field>
+          <Field label="WhatsApp number">
+            <input
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.whatsappNumber || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), whatsappNumber: e.target.value }))}
+              placeholder="WhatsApp"
+            />
+          </Field>
+
+          <Field label="Email">
+            <input
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.email || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), email: e.target.value }))}
+              placeholder="cafe@email.com"
+            />
+          </Field>
+
+          <div className="md:col-span-2">
+            <Field label="Description">
+              <textarea
+                className="min-h-[90px] w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                value={cafe?.description || ''}
+                onChange={(e) => setCafe((c) => ({ ...(c || {}), description: e.target.value }))}
+                placeholder="About your cafe..."
+              />
+            </Field>
+          </div>
+
+          <div className="md:col-span-2">
+            <Field label="Full address">
+              <input
+                className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                value={cafe?.addressLine || ''}
+                onChange={(e) => setCafe((c) => ({ ...(c || {}), addressLine: e.target.value }))}
+                placeholder="Street / landmark"
+              />
+            </Field>
+          </div>
+
+          <Field label="City">
+            <input
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.city || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), city: e.target.value }))}
+            />
+          </Field>
+          <Field label="State">
+            <input
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.state || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), state: e.target.value }))}
+            />
+          </Field>
+          <Field label="Pincode">
+            <input
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.pincode || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), pincode: e.target.value }))}
+            />
+          </Field>
+
+          <Field label="Opening time">
+            <input
+              type="time"
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.openingTime || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), openingTime: e.target.value }))}
+              placeholder="09:00"
+            />
+          </Field>
+          <Field label="Closing time">
+            <input
+              type="time"
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.closingTime || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), closingTime: e.target.value }))}
+              placeholder="23:00"
             />
           </Field>
         </div>
+      ) : null}
 
-        <Field label="City">
-          <input
-            className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-            value={cafe?.city || ''}
-            onChange={(e) => setCafe((c) => ({ ...(c || {}), city: e.target.value }))}
-          />
-        </Field>
-        <Field label="State">
-          <input
-            className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-            value={cafe?.state || ''}
-            onChange={(e) => setCafe((c) => ({ ...(c || {}), state: e.target.value }))}
-          />
-        </Field>
-        <Field label="Pincode">
-          <input
-            className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-            value={cafe?.pincode || ''}
-            onChange={(e) => setCafe((c) => ({ ...(c || {}), pincode: e.target.value }))}
-          />
-        </Field>
+      {cafeStep === 1 ? (
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <Field label="FSSAI number">
+            <input
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.fssaiNumber || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), fssaiNumber: e.target.value }))}
+              placeholder="FSSAI"
+            />
+          </Field>
+          <Field label="PAN number">
+            <input
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.panNumber || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), panNumber: e.target.value }))}
+              placeholder="PAN"
+            />
+          </Field>
+          <Field label="GSTIN">
+            <input
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.gstin || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), gstin: e.target.value }))}
+              placeholder="GSTIN"
+            />
+          </Field>
+          <Field label="Shop/Establishment license number">
+            <input
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.shopLicenseNumber || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), shopLicenseNumber: e.target.value }))}
+              placeholder="License"
+            />
+          </Field>
+        </div>
+      ) : null}
 
-        <Field label="Opening time">
-          <input
-            type="time"
-            className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-            value={cafe?.openingTime || ''}
-            onChange={(e) => setCafe((c) => ({ ...(c || {}), openingTime: e.target.value }))}
-            placeholder="09:00"
-          />
-        </Field>
-        <Field label="Closing time">
-          <input
-            type="time"
-            className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-            value={cafe?.closingTime || ''}
-            onChange={(e) => setCafe((c) => ({ ...(c || {}), closingTime: e.target.value }))}
-            placeholder="23:00"
-          />
-        </Field>
+      {cafeStep === 2 ? (
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <Field label="Bank account number">
+            <input
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.bankAccountNumber || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), bankAccountNumber: e.target.value }))}
+            />
+          </Field>
+          <Field label="IFSC">
+            <input
+              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+              value={cafe?.bankIfsc || ''}
+              onChange={(e) => setCafe((c) => ({ ...(c || {}), bankIfsc: e.target.value }))}
+            />
+          </Field>
+          <div className="md:col-span-2">
+            <Field label="Account holder name">
+              <input
+                className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                value={cafe?.bankAccountHolderName || ''}
+                onChange={(e) => setCafe((c) => ({ ...(c || {}), bankAccountHolderName: e.target.value }))}
+              />
+            </Field>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-6 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm disabled:opacity-60"
+          disabled={cafeLoading || cafeStep === 0}
+          onClick={() => setCafeStep((s) => Math.max(0, s - 1))}
+        >
+          Back
+        </button>
+
+        {cafeStep < cafeSteps.length - 1 ? (
+          <button
+            type="button"
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+            disabled={cafeLoading || !canGoNextCafe}
+            onClick={() => setCafeStep((s) => Math.min(cafeSteps.length - 1, s + 1))}
+          >
+            Next
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+            onClick={onSaveCafe}
+            disabled={cafeLoading || !canSaveCafe || !canSubmitCafe}
+          >
+            Save
+          </button>
+        )}
       </div>
     </div>
   )
 }
 
-function OnboardingSection({ cafe, setCafe, cafeLoading, cafeErr, cafeMsg, canSaveCafe, refreshCafe, onSaveCafe }) {
+function OnboardingSection({
+  cafe,
+  setCafe,
+  cafeSteps,
+  cafeStep,
+  setCafeStep,
+  canGoNextCafe,
+  canSubmitCafe,
+  cafeLoading,
+  cafeErr,
+  cafeMsg,
+  canSaveCafe,
+  refreshCafe,
+  onSaveCafe
+}) {
   return (
     <div className="mt-10 rounded-3xl border border-black/10 bg-white/70 p-8">
       <div className="text-xs font-semibold text-slate-600">First step</div>
@@ -196,6 +345,11 @@ function OnboardingSection({ cafe, setCafe, cafeLoading, cafeErr, cafeMsg, canSa
       <ProfileSection
         cafe={cafe}
         setCafe={setCafe}
+        cafeSteps={cafeSteps}
+        cafeStep={cafeStep}
+        setCafeStep={setCafeStep}
+        canGoNextCafe={canGoNextCafe}
+        canSubmitCafe={canSubmitCafe}
         cafeLoading={cafeLoading}
         cafeErr={cafeErr}
         cafeMsg={cafeMsg}
@@ -217,6 +371,9 @@ export default function OwnerDashboard() {
   const [cafeLoading, setCafeLoading] = useState(false)
   const [cafeMsg, setCafeMsg] = useState('')
   const [cafeErr, setCafeErr] = useState('')
+
+  const cafeSteps = ['Basic & contact', 'Legal', 'Bank']
+  const [cafeStep, setCafeStep] = useState(0)
 
   const [hasCafe, setHasCafe] = useState(false)
 
@@ -252,6 +409,14 @@ export default function OwnerDashboard() {
   const [imgLoading, setImgLoading] = useState(false)
   const [imgMsg, setImgMsg] = useState('')
   const [imgErr, setImgErr] = useState('')
+
+  const [bookings, setBookings] = useState([])
+  const [bookingsLoading, setBookingsLoading] = useState(false)
+  const [bookingsErr, setBookingsErr] = useState('')
+
+  const [orders, setOrders] = useState([])
+  const [ordersLoading, setOrdersLoading] = useState(false)
+  const [ordersErr, setOrdersErr] = useState('')
 
   const [uploadFile, setUploadFile] = useState(null)
   const [uploadCover, setUploadCover] = useState(false)
@@ -355,24 +520,38 @@ export default function OwnerDashboard() {
 
     setCafeLoading(true)
     try {
-      await upsertOwnerCafe(ownerUsername, {
+      const payload = {
         cafeName: String(cafe?.cafeName || '').trim(),
+        ownerNames: String(cafe?.ownerNames || '').trim() || null,
+        pocDesignation: String(cafe?.pocDesignation || '').trim() || null,
         description: String(cafe?.description || '').trim() || null,
         phone: String(cafe?.phone || '').trim() || null,
         email: String(cafe?.email || '').trim() || null,
+        whatsappNumber: String(cafe?.whatsappNumber || '').trim() || null,
         addressLine: String(cafe?.addressLine || '').trim() || null,
         city: String(cafe?.city || '').trim() || null,
         state: String(cafe?.state || '').trim() || null,
         pincode: String(cafe?.pincode || '').trim() || null,
         openingTime: String(cafe?.openingTime || '').trim() || null,
         closingTime: String(cafe?.closingTime || '').trim() || null,
+        fssaiNumber: String(cafe?.fssaiNumber || '').trim() || null,
+        panNumber: String(cafe?.panNumber || '').trim() || null,
+        gstin: String(cafe?.gstin || '').trim() || null,
+        shopLicenseNumber: String(cafe?.shopLicenseNumber || '').trim() || null,
+        bankAccountNumber: String(cafe?.bankAccountNumber || '').trim() || null,
+        bankIfsc: String(cafe?.bankIfsc || '').trim() || null,
+        bankAccountHolderName: String(cafe?.bankAccountHolderName || '').trim() || null,
         active: cafe?.active ?? true
-      })
+      }
+
+      await upsertOwnerCafe(ownerUsername, payload)
       setCafeMsg('Saved')
       await refreshCafe()
     } catch (e) {
-      const msg = e?.response?.data
-      setCafeErr(typeof msg === 'string' ? msg : 'Failed to save cafe')
+      const status = e?.response?.status
+      const data = e?.response?.data
+      const msg = typeof data === 'string' ? data : data ? JSON.stringify(data) : ''
+      setCafeErr(`${status ? `HTTP ${status}: ` : ''}${msg || 'Failed to save cafe'}`)
     } finally {
       setCafeLoading(false)
     }
@@ -438,6 +617,34 @@ export default function OwnerDashboard() {
     }
   }
 
+  async function refreshBookings() {
+    setBookingsErr('')
+    setBookingsLoading(true)
+    try {
+      const res = await listOwnerBookings(ownerUsername)
+      setBookings(Array.isArray(res) ? res : [])
+    } catch (e) {
+      const msg = e?.response?.data
+      setBookingsErr(typeof msg === 'string' ? msg : 'Failed to load bookings')
+    } finally {
+      setBookingsLoading(false)
+    }
+  }
+
+  async function refreshOrders() {
+    setOrdersErr('')
+    setOrdersLoading(true)
+    try {
+      const res = await listOwnerOrders(ownerUsername)
+      setOrders(Array.isArray(res) ? res : [])
+    } catch (e) {
+      const msg = e?.response?.data
+      setOrdersErr(typeof msg === 'string' ? msg : 'Failed to load orders')
+    } finally {
+      setOrdersLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (!ownerUsername) return
     ;(async () => {
@@ -447,9 +654,147 @@ export default function OwnerDashboard() {
         await refreshMenu()
         await refreshCapacities()
         await refreshImages()
+        await refreshBookings()
+        await refreshOrders()
       }
     })()
   }, [ownerUsername])
+
+  function BookingsSection() {
+    return (
+      <div className="mt-6 rounded-2xl border border-black/10 bg-white/70 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold">Bookings</div>
+            <div className="mt-1 text-xs text-slate-600">Table bookings made by customers.</div>
+          </div>
+          <button
+            type="button"
+            className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm"
+            onClick={refreshBookings}
+            disabled={bookingsLoading}
+          >
+            Refresh
+          </button>
+        </div>
+
+        {bookingsErr ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{bookingsErr}</div> : null}
+        {bookingsLoading ? <div className="mt-4 text-sm text-slate-600">Loading...</div> : null}
+
+        {!bookingsLoading ? (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left text-sm">
+              <thead className="text-xs font-semibold uppercase text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Customer</th>
+                  <th className="px-3 py-2">Phone</th>
+                  <th className="px-3 py-2">Date</th>
+                  <th className="px-3 py-2">Time</th>
+                  <th className="px-3 py-2">Guests</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Note</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {Array.isArray(bookings) && bookings.length > 0 ? (
+                  bookings.map((b) => (
+                    <tr key={b.id} className="bg-white/60">
+                      <td className="px-3 py-2 font-semibold text-slate-900">{b.customerName || '-'}</td>
+                      <td className="px-3 py-2 text-slate-700">{b.customerPhone || '-'}</td>
+                      <td className="px-3 py-2 text-slate-700">{b.bookingDate || '-'}</td>
+                      <td className="px-3 py-2 text-slate-700">{b.bookingTime || '-'}</td>
+                      <td className="px-3 py-2 text-slate-700">{b.guests ?? '-'}</td>
+                      <td className="px-3 py-2 text-slate-700">{b.status || 'PENDING'}</td>
+                      <td className="px-3 py-2 text-slate-600">{b.note || '-'}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="px-3 py-4 text-slate-600" colSpan={7}>
+                      No bookings yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
+  function OrdersSection() {
+    return (
+      <div className="mt-6 rounded-2xl border border-black/10 bg-white/70 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold">Orders</div>
+            <div className="mt-1 text-xs text-slate-600">Food orders placed by customers.</div>
+          </div>
+          <button
+            type="button"
+            className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm"
+            onClick={refreshOrders}
+            disabled={ordersLoading}
+          >
+            Refresh
+          </button>
+        </div>
+
+        {ordersErr ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{ordersErr}</div> : null}
+        {ordersLoading ? <div className="mt-4 text-sm text-slate-600">Loading...</div> : null}
+
+        {!ordersLoading ? (
+          <div className="mt-4 grid gap-3">
+            {Array.isArray(orders) && orders.length > 0 ? (
+              orders.map((o) => (
+                <div key={o.id} className="rounded-2xl border border-black/10 bg-white/70 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-extrabold text-slate-900">Order #{o.id}</div>
+                      <div className="mt-1 text-xs text-slate-600">
+                        {o.customerName || '-'} • {o.customerPhone || '-'} • {o.status || 'PLACED'}
+                      </div>
+                    </div>
+                    <div className="text-sm font-extrabold">₹{o.totalAmount ?? 0}</div>
+                  </div>
+
+                  {Array.isArray(o.items) && o.items.length > 0 ? (
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="w-full min-w-[560px] text-left text-sm">
+                        <thead className="text-xs font-semibold uppercase text-slate-500">
+                          <tr>
+                            <th className="px-3 py-2">Item</th>
+                            <th className="px-3 py-2">Price</th>
+                            <th className="px-3 py-2">Qty</th>
+                            <th className="px-3 py-2">Subtotal</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                          {o.items.map((it, idx) => (
+                            <tr key={`${o.id}-${idx}`} className="bg-white/60">
+                              <td className="px-3 py-2 font-semibold text-slate-900">{it.itemName || '-'}</td>
+                              <td className="px-3 py-2 text-slate-700">₹{it.price ?? 0}</td>
+                              <td className="px-3 py-2 text-slate-700">{it.qty ?? 0}</td>
+                              <td className="px-3 py-2 text-slate-700">₹{((it.price ?? 0) * (it.qty ?? 0)).toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-sm text-slate-600">No items.</div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="text-sm text-slate-600">No orders yet.</div>
+            )}
+          </div>
+        ) : null}
+      </div>
+    )
+  }
 
   async function onCreateMenuItem() {
     setMenuErr('')
@@ -642,6 +987,23 @@ export default function OwnerDashboard() {
   }
 
   const canSaveCafe = useMemo(() => {
+    return !!(cafe?.cafeName && String(cafe.cafeName).trim().length >= 2)
+  }, [cafe])
+
+  const canGoNextCafe = useMemo(() => {
+    if (cafeStep === 0) {
+      return !!(cafe?.cafeName && String(cafe.cafeName).trim().length >= 2)
+    }
+    if (cafeStep === 1) {
+      return true
+    }
+    if (cafeStep === 2) {
+      return true
+    }
+    return true
+  }, [cafeStep, cafe])
+
+  const canSubmitCafe = useMemo(() => {
     return !!(cafe?.cafeName && String(cafe.cafeName).trim().length >= 2)
   }, [cafe])
 
@@ -1808,6 +2170,11 @@ export default function OwnerDashboard() {
                   <ProfileSection
                     cafe={cafe}
                     setCafe={setCafe}
+                    cafeSteps={cafeSteps}
+                    cafeStep={cafeStep}
+                    setCafeStep={setCafeStep}
+                    canGoNextCafe={canGoNextCafe}
+                    canSubmitCafe={canSubmitCafe}
                     cafeLoading={cafeLoading}
                     cafeErr={cafeErr}
                     cafeMsg={cafeMsg}
@@ -1821,14 +2188,19 @@ export default function OwnerDashboard() {
                 {tab === 'menu' ? MenuSection() : null}
                 {tab === 'capacities' ? CapacitiesSection() : null}
                 {tab === 'images' ? ImagesSection() : null}
-                {tab === 'bookings' ? PlaceholderSection({ title: 'Bookings', subtitle: 'View upcoming and past bookings.' }) : null}
-                {tab === 'orders' ? PlaceholderSection({ title: 'Orders', subtitle: 'Track dine-in and takeaway orders.' }) : null}
+                {tab === 'bookings' ? BookingsSection() : null}
+                {tab === 'orders' ? OrdersSection() : null}
               </>
             ) : (
               <>
                 <OnboardingSection
                   cafe={cafe}
                   setCafe={setCafe}
+                  cafeSteps={cafeSteps}
+                  cafeStep={cafeStep}
+                  setCafeStep={setCafeStep}
+                  canGoNextCafe={canGoNextCafe}
+                  canSubmitCafe={canSubmitCafe}
                   cafeLoading={cafeLoading}
                   cafeErr={cafeErr}
                   cafeMsg={cafeMsg}

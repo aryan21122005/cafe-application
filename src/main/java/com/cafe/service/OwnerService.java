@@ -1,5 +1,6 @@
 package com.cafe.service;
 
+import com.cafe.dto.CafeDocumentRow;
 import com.cafe.dto.CafeProfileRequest;
 import com.cafe.dto.CafeProfileResponse;
 import com.cafe.dto.CafeImageRow;
@@ -9,7 +10,8 @@ import com.cafe.dto.MenuItemRequest;
 import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.OwnerStaffCreateRequest;
 import com.cafe.dto.OwnerStaffRow;
-import com.cafe.dto.CafeDocumentRow;
+import com.cafe.dto.CafeBookingRow;
+import com.cafe.dto.CafeOrderRow;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -20,6 +22,8 @@ public interface OwnerService {
     ResponseEntity<CafeProfileResponse> getCafe(String ownerUsername);
 
     ResponseEntity<CafeProfileResponse> upsertCafe(String ownerUsername, CafeProfileRequest request);
+
+    ResponseEntity<CafeProfileResponse> upsertCafeWithDocuments(String ownerUsername, CafeProfileRequest request, List<String> docKeys, List<MultipartFile> documents);
 
     ResponseEntity<String> deleteCafe(String ownerUsername);
 
@@ -58,4 +62,8 @@ public interface OwnerService {
     ResponseEntity<CafeImageRow> uploadImage(String ownerUsername, MultipartFile file, Boolean cover);
 
     ResponseEntity<String> deleteImage(String ownerUsername, Long id);
+
+    ResponseEntity<List<CafeBookingRow>> listBookings(String ownerUsername);
+
+    ResponseEntity<List<CafeOrderRow>> listOrders(String ownerUsername);
 }
