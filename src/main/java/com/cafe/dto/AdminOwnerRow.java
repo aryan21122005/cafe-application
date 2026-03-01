@@ -12,5 +12,5 @@ public class AdminOwnerRow {
     private String email;
     private String phone;
 
-    private Boolean hasCafe;
+    private String cafeName;
 }

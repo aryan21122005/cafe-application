@@ -10,6 +10,7 @@ import {
   deleteUser,
   getCafeDetailAdmin,
   getUserDetail,
+  getUserDetailByUsername,
   listCafeMenu,
   listCafes,
   listOwners,
@@ -70,6 +71,15 @@ export default function AdminDashboard() {
   const [pageSize, setPageSize] = useState(10)
   const [page, setPage] = useState(1)
 
+  const [ownersQ, setOwnersQ] = useState('')
+  const [ownersPageSize, setOwnersPageSize] = useState(10)
+  const [ownersPage, setOwnersPage] = useState(1)
+
+  const [cafesQ, setCafesQ] = useState('')
+  const [cafesStatus, setCafesStatus] = useState('ALL')
+  const [cafesPageSize2, setCafesPageSize2] = useState(10)
+  const [cafesPage2, setCafesPage2] = useState(1)
+
   const [selectedUserId, setSelectedUserId] = useState(null)
   const [selectedUser, setSelectedUser] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -118,6 +128,66 @@ export default function AdminDashboard() {
   const [addCafeBusy, setAddCafeBusy] = useState(false)
   const [addCafeErr, setAddCafeErr] = useState('')
   const [addCafeMsg, setAddCafeMsg] = useState('')
+
+  const filteredOwners = useMemo(() => {
+    const list = Array.isArray(owners) ? owners : []
+    const query = String(ownersQ || '').trim().toLowerCase()
+    if (!query) return list
+
+    return list.filter((o) => {
+      const hay = [o?.id, o?.username, o?.email, o?.phone, o?.cafeName]
+        .filter((v) => v !== null && v !== undefined)
+        .map((v) => String(v).toLowerCase())
+        .join(' | ')
+      return hay.includes(query)
+    })
+  }, [owners, ownersQ])
+
+  const ownersTotalPages = useMemo(() => {
+    const size = Number(ownersPageSize) || 10
+    return Math.max(1, Math.ceil(filteredOwners.length / size))
+  }, [filteredOwners.length, ownersPageSize])
+
+  const pagedOwners = useMemo(() => {
+    const size = Number(ownersPageSize) || 10
+    const safePage = Math.min(Math.max(1, ownersPage), ownersTotalPages)
+    const start = (safePage - 1) * size
+    return filteredOwners.slice(start, start + size)
+  }, [filteredOwners, ownersPage, ownersPageSize, ownersTotalPages])
+
+  const filteredCafes = useMemo(() => {
+    const list = Array.isArray(cafes) ? cafes : []
+    const query = String(cafesQ || '').trim().toLowerCase()
+    const statusQ = String(cafesStatus || 'ALL').toUpperCase()
+
+    return list.filter((c) => {
+      if (statusQ !== 'ALL') {
+        const active = !!c?.active
+        if (statusQ === 'ACTIVE' && !active) return false
+        if (statusQ === 'INACTIVE' && active) return false
+      }
+
+      if (!query) return true
+
+      const hay = [c?.id, c?.cafeName, c?.ownerUsername, c?.city, c?.state, c?.active]
+        .filter((v) => v !== null && v !== undefined)
+        .map((v) => String(v).toLowerCase())
+        .join(' | ')
+      return hay.includes(query)
+    })
+  }, [cafes, cafesQ, cafesStatus])
+
+  const cafesTotalPages2 = useMemo(() => {
+    const size = Number(cafesPageSize2) || 10
+    return Math.max(1, Math.ceil(filteredCafes.length / size))
+  }, [filteredCafes.length, cafesPageSize2])
+
+  const pagedCafes2 = useMemo(() => {
+    const size = Number(cafesPageSize2) || 10
+    const safePage = Math.min(Math.max(1, cafesPage2), cafesTotalPages2)
+    const start = (safePage - 1) * size
+    return filteredCafes.slice(start, start + size)
+  }, [filteredCafes, cafesPage2, cafesPageSize2, cafesTotalPages2])
   const addCafeSteps = ['Owner', 'Basic & contact', 'Legal', 'Bank']
   const [addCafeStep, setAddCafeStep] = useState(0)
   const [cafeName, setCafeName] = useState('')
@@ -277,15 +347,44 @@ export default function AdminDashboard() {
   }, [])
 
   useEffect(() => {
-    if (section === 'cafes') {
-      refreshCafes()
-      refreshOwners()
+    if (section === 'users' && users.length === 0) {
+      refresh()
     }
-    if (section === 'owners') {
+    if (section === 'cafes' && cafes.length === 0) {
+      refreshCafes()
+    }
+    if (section === 'owners' && owners.length === 0) {
       refreshOwners()
     }
   }, [section])
-  
+
+  useEffect(() => {
+    if (!showAddCafe) return
+    if (!selectedOwnerUsername) return
+
+    ;(async () => {
+      try {
+        const detail = await getUserDetailByUsername(selectedOwnerUsername)
+        const pd = detail?.personalDetails || {}
+        const addr = detail?.address || {}
+
+        const ownerFullName = [pd.firstName, pd.lastName].filter(Boolean).join(' ').trim()
+
+        if (!cafeOwnerNames.trim() && ownerFullName) setCafeOwnerNames(ownerFullName)
+        if (!cafePhone.trim() && pd.phone) setCafePhone(String(pd.phone))
+        if (!cafeWhatsappNumber.trim() && (pd.contactNo || pd.phone)) setCafeWhatsappNumber(String(pd.contactNo || pd.phone))
+        if (!cafeEmail.trim() && pd.email) setCafeEmail(String(pd.email))
+
+        if (!cafeCity.trim() && addr.city) setCafeCity(String(addr.city))
+        if (!cafeState.trim() && addr.state) setCafeState(String(addr.state))
+        if (!cafePincode.trim() && addr.pincode) setCafePincode(String(addr.pincode))
+
+        if (!cafeAddressLine.trim() && addr.street) setCafeAddressLine(String(addr.street))
+      } catch (e) {
+        // ignore autofill errors
+      }
+    })()
+  }, [showAddCafe, selectedOwnerUsername])
 
   async function onApprove(id) {
     setActionBusyId(id)
@@ -866,11 +965,11 @@ export default function AdminDashboard() {
   function OwnerManagementSection() {
     return (
       <>
-        <SectionTitle
+        {/* <SectionTitle
           breadcrumb="Dashboard / Cafe Owner Management"
           title="Cafe Owner Management"
           subtitle="Create and view cafe owners"
-        />
+        /> */}
 
         <div className="mt-6 rounded-2xl border border-slate-200 bg-white">
           <div className="flex flex-col gap-3 border-b border-slate-200 p-5 md:flex-row md:items-center md:justify-between">
@@ -878,17 +977,47 @@ export default function AdminDashboard() {
               <div className="text-sm font-semibold">Cafe owners</div>
               <div className="mt-1 text-xs text-slate-500">List of all cafe owners on the platform</div>
             </div>
-            <button
-              type="button"
-              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
-              onClick={() => {
-                setShowAddOwner(true)
-                setAddOwnerErr('')
-                setAddOwnerMsg('')
-              }}
-            >
-              Add cafe owner
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <span>Show</span>
+                <select
+                  value={ownersPageSize}
+                  onChange={(e) => {
+                    setOwnersPageSize(Number(e.target.value) || 10)
+                    setOwnersPage(1)
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+                <span>entries</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <span>Search:</span>
+                <input
+                  value={ownersQ}
+                  onChange={(e) => {
+                    setOwnersQ(e.target.value)
+                    setOwnersPage(1)
+                  }}
+                  className="w-56 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                  placeholder="username / email / cafe"
+                />
+              </div>
+              <button
+                type="button"
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+                onClick={() => {
+                  setShowAddOwner(true)
+                  setAddOwnerErr('')
+                  setAddOwnerMsg('')
+                }}
+              >
+                Add cafe owner
+              </button>
+            </div>
           </div>
 
           {ownersError ? <div className="px-5 py-3 text-sm text-red-700">{ownersError}</div> : null}
@@ -901,7 +1030,7 @@ export default function AdminDashboard() {
                   <th className="px-5 py-3">Owner</th>
                   <th className="px-5 py-3">Email</th>
                   <th className="px-5 py-3">Phone</th>
-                  <th className="px-5 py-3">Has cafe</th>
+                  <th className="px-5 py-3">Cafe</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -911,25 +1040,55 @@ export default function AdminDashboard() {
                       Loading...
                     </td>
                   </tr>
-                ) : owners.length === 0 ? (
+                ) : filteredOwners.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-5 py-6 text-slate-500">
                       No owners yet.
                     </td>
                   </tr>
                 ) : (
-                  owners.map((o) => (
+                  pagedOwners.map((o) => (
                     <tr key={o.id} className="hover:bg-slate-50">
                       <td className="px-5 py-3 font-semibold">{o.username}</td>
                       <td className="px-5 py-3 text-slate-700">{o.email || '-'}</td>
                       <td className="px-5 py-3 text-slate-700">{o.phone || '-'}</td>
-                      <td className="px-5 py-3 text-slate-700">{String(!!o.hasCafe)}</td>
+                      <td className="px-5 py-3 text-slate-700">{o.cafeName || ''}</td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
           </div>
+
+          {!ownersLoading && filteredOwners.length > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 p-4 text-sm text-slate-700">
+              <div>
+                Showing {(Math.min(Math.max(1, ownersPage), ownersTotalPages) - 1) * (Number(ownersPageSize) || 10) + 1} to{' '}
+                {Math.min(Math.min(Math.max(1, ownersPage), ownersTotalPages) * (Number(ownersPageSize) || 10), filteredOwners.length)} of {filteredOwners.length} entries
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                  onClick={() => setOwnersPage((p) => Math.max(1, p - 1))}
+                  disabled={ownersPage <= 1}
+                >
+                  Prev
+                </button>
+                <div className="text-xs">
+                  Page {Math.min(Math.max(1, ownersPage), ownersTotalPages)} of {ownersTotalPages}
+                </div>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                  onClick={() => setOwnersPage((p) => Math.min(ownersTotalPages, p + 1))}
+                  disabled={ownersPage >= ownersTotalPages}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </>
     )
@@ -938,11 +1097,11 @@ export default function AdminDashboard() {
   function CafeManagementSection() {
     return (
       <>
-        <SectionTitle
+        {/* <SectionTitle
           breadcrumb="Dashboard / Cafe Management"
           title="Cafe Management"
           subtitle="Approve, reject, suspend, activate and review performance"
-        />
+        /> */}
 
         {cafesError ? (
           <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{cafesError}</div>
@@ -954,7 +1113,50 @@ export default function AdminDashboard() {
               <div className="text-sm font-semibold">Cafes</div>
               <div className="mt-1 text-xs text-slate-500">View all cafes and manage registrations</div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <span>Show</span>
+                <select
+                  value={cafesPageSize2}
+                  onChange={(e) => {
+                    setCafesPageSize2(Number(e.target.value) || 10)
+                    setCafesPage2(1)
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+                <span>entries</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <span>Status:</span>
+                <select
+                  value={cafesStatus}
+                  onChange={(e) => {
+                    setCafesStatus(e.target.value)
+                    setCafesPage2(1)
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1"
+                >
+                  <option value="ALL">All</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="INACTIVE">Inactive</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <span>Search:</span>
+                <input
+                  value={cafesQ}
+                  onChange={(e) => {
+                    setCafesQ(e.target.value)
+                    setCafesPage2(1)
+                  }}
+                  className="w-56 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                  placeholder="cafe / owner / city"
+                />
+              </div>
               <button
                 type="button"
                 className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
@@ -1002,14 +1204,14 @@ export default function AdminDashboard() {
                       Loading...
                     </td>
                   </tr>
-                ) : cafes.length === 0 ? (
+                ) : filteredCafes.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-5 py-6 text-slate-500">
                       No cafes available yet.
                     </td>
                   </tr>
                 ) : (
-                  cafes.map((cafe) => (
+                  pagedCafes2.map((cafe) => (
                     <tr key={cafe.id} className="hover:bg-slate-50">
                       <td className="px-5 py-3 font-semibold">{cafe.cafeName}</td>
                       <td className="px-5 py-3">{cafe.ownerUsername}</td>
@@ -1043,6 +1245,36 @@ export default function AdminDashboard() {
               </tbody>
             </table>
           </div>
+
+          {!cafesLoading && filteredCafes.length > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 p-4 text-sm text-slate-700">
+              <div>
+                Showing {(Math.min(Math.max(1, cafesPage2), cafesTotalPages2) - 1) * (Number(cafesPageSize2) || 10) + 1} to{' '}
+                {Math.min(Math.min(Math.max(1, cafesPage2), cafesTotalPages2) * (Number(cafesPageSize2) || 10), filteredCafes.length)} of {filteredCafes.length} entries
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                  onClick={() => setCafesPage2((p) => Math.max(1, p - 1))}
+                  disabled={cafesPage2 <= 1}
+                >
+                  Prev
+                </button>
+                <div className="text-xs">
+                  Page {Math.min(Math.max(1, cafesPage2), cafesTotalPages2)} of {cafesTotalPages2}
+                </div>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                  onClick={() => setCafesPage2((p) => Math.min(cafesTotalPages2, p + 1))}
+                  disabled={cafesPage2 >= cafesTotalPages2}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </>
     )
@@ -1051,7 +1283,7 @@ export default function AdminDashboard() {
   function UserManagementSection() {
     return (
       <>
-        <SectionTitle breadcrumb="Dashboard / User Management" title="User Management" subtitle="Approve registrations and manage users" />
+        {/* <SectionTitle breadcrumb="Dashboard / User Management" title="User Management" subtitle="Approve registrations and manage users" /> */}
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           <Card label="TOTAL USERS" value={counts.total} />
@@ -1680,7 +1912,7 @@ export default function AdminDashboard() {
 
           {showAddOwner ? (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setShowAddOwner(false)}>
-              <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-2xl bg-white p-6" onMouseDown={(e) => e.stopPropagation()}>
+              <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6" onMouseDown={(e) => e.stopPropagation()}>
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <div className="text-xs text-slate-500">Admin action</div>
@@ -1905,7 +2137,7 @@ export default function AdminDashboard() {
                           })
                           .map((o) => (
                             <option key={o.id} value={o.username}>
-                              {o.username} {o.email ? `(${o.email})` : ''} {o.hasCafe ? '• has cafe' : ''}
+                              {o.username} {o.email ? `(${o.email})` : ''} {o.cafeName ? `• ${o.cafeName}` : ''}
                             </option>
                           ))}
                       </select>

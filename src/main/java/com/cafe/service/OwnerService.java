@@ -1,5 +1,6 @@
 package com.cafe.service;
 
+import com.cafe.dto.AdminUserDetail;
 import com.cafe.dto.CafeDocumentRow;
 import com.cafe.dto.CafeProfileRequest;
 import com.cafe.dto.CafeProfileResponse;
@@ -12,6 +13,7 @@ import com.cafe.dto.OwnerStaffCreateRequest;
 import com.cafe.dto.OwnerStaffRow;
 import com.cafe.dto.CafeBookingRow;
 import com.cafe.dto.CafeOrderRow;
+import com.cafe.dto.BookingDecisionRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -20,6 +22,8 @@ import java.util.List;
 public interface OwnerService {
 
     ResponseEntity<CafeProfileResponse> getCafe(String ownerUsername);
+
+    ResponseEntity<AdminUserDetail> getMe(String ownerUsername);
 
     ResponseEntity<CafeProfileResponse> upsertCafe(String ownerUsername, CafeProfileRequest request);
 
@@ -64,6 +68,12 @@ public interface OwnerService {
     ResponseEntity<String> deleteImage(String ownerUsername, Long id);
 
     ResponseEntity<List<CafeBookingRow>> listBookings(String ownerUsername);
+
+    ResponseEntity<CafeBookingRow> approveBooking(String ownerUsername, Long bookingId);
+
+    ResponseEntity<CafeBookingRow> denyBooking(String ownerUsername, Long bookingId, BookingDecisionRequest request);
+
+    ResponseEntity<String> deleteBooking(String ownerUsername, Long bookingId);
 
     ResponseEntity<List<CafeOrderRow>> listOrders(String ownerUsername);
 }

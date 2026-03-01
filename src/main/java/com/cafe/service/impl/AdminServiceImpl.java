@@ -269,7 +269,7 @@ public class AdminServiceImpl implements AdminService {
                 r.setUsername(u.getUsername());
                 r.setEmail(u.getPersonalDetails() == null ? null : u.getPersonalDetails().getEmail());
                 r.setPhone(u.getPersonalDetails() == null ? null : u.getPersonalDetails().getPhone());
-                r.setHasCafe(cafeRepository.findByOwnerUsername(u.getUsername()).isPresent());
+                cafeRepository.findByOwnerUsername(u.getUsername()).ifPresent(c -> r.setCafeName(c.getCafeName()));
                 rows.add(r);
             }
             return ResponseEntity.ok(rows);
@@ -659,6 +659,22 @@ public class AdminServiceImpl implements AdminService {
             detail.setDocuments(docs);
 
             return ResponseEntity.ok(detail);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<AdminUserDetail> getUserDetailByUsername(String username) {
+        try {
+            if (username == null || username.isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            User u = userRepository.findByUsername(username).orElse(null);
+            if (u == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            return getUserDetail(u.getId());
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }

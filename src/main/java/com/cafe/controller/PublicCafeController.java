@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.ArrayList;
 
 @RestController
 @RequestMapping("/api/public")
@@ -118,6 +119,17 @@ public class PublicCafeController {
         if (cover != null) {
             r.setCoverImageUrl("/api/public/cafe-images/" + cover.getId());
         }
+
+        List<String> urls = new ArrayList<>();
+        if (cover != null) {
+            urls.add("/api/public/cafe-images/" + cover.getId());
+        }
+        imgs.stream()
+                .filter(i -> i != null && (cover == null || !i.getId().equals(cover.getId())))
+                .sorted(Comparator.comparing(CafeImage::getId))
+                .limit(4)
+                .forEach(i -> urls.add("/api/public/cafe-images/" + i.getId()));
+        r.setImageUrls(urls);
         return r;
     }
 

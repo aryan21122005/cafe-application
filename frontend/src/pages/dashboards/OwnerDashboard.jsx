@@ -8,7 +8,11 @@ import {
   deleteOwnerStaff,
   deleteOwnerImage,
   deleteOwnerMenuItem,
+  approveOwnerBooking,
+  deleteOwnerBooking,
+  denyOwnerBooking,
   getOwnerCafe,
+  getOwnerMe,
   listOwnerBookings,
   listOwnerCapacities,
   listOwnerImages,
@@ -382,6 +386,10 @@ export default function OwnerDashboard() {
   const [staffMsg, setStaffMsg] = useState('')
   const [staffErr, setStaffErr] = useState('')
 
+  const [staffQ, setStaffQ] = useState('')
+  const [staffPageSize, setStaffPageSize] = useState(10)
+  const [staffPage, setStaffPage] = useState(1)
+
   const [menu, setMenu] = useState([])
   const [menuLoading, setMenuLoading] = useState(false)
   const [menuMsg, setMenuMsg] = useState('')
@@ -413,6 +421,11 @@ export default function OwnerDashboard() {
   const [bookings, setBookings] = useState([])
   const [bookingsLoading, setBookingsLoading] = useState(false)
   const [bookingsErr, setBookingsErr] = useState('')
+
+  const [denyOpen, setDenyOpen] = useState(false)
+  const [denyBookingId, setDenyBookingId] = useState(null)
+  const [denyReason, setDenyReason] = useState('')
+  const [denyBusy, setDenyBusy] = useState(false)
 
   const [orders, setOrders] = useState([])
   const [ordersLoading, setOrdersLoading] = useState(false)
@@ -461,7 +474,35 @@ export default function OwnerDashboard() {
 
   const [newStaffDocuments, setNewStaffDocuments] = useState([])
 
+  const [didPrefillCafe, setDidPrefillCafe] = useState(false)
+
   const ownerUsername = session?.username
+
+  const filteredStaff = useMemo(() => {
+    const list = Array.isArray(staff) ? staff : []
+    const q = String(staffQ || '').trim().toLowerCase()
+    if (!q) return list
+
+    return list.filter((u) => {
+      const hay = [u?.id, u?.username, u?.role, u?.approvalStatus, u?.email, u?.phone]
+        .filter((v) => v !== null && v !== undefined)
+        .map((v) => String(v).toLowerCase())
+        .join(' | ')
+      return hay.includes(q)
+    })
+  }, [staff, staffQ])
+
+  const staffTotalPages = useMemo(() => {
+    const size = Number(staffPageSize) || 10
+    return Math.max(1, Math.ceil(filteredStaff.length / size))
+  }, [filteredStaff.length, staffPageSize])
+
+  const pagedStaff = useMemo(() => {
+    const size = Number(staffPageSize) || 10
+    const safePage = Math.min(Math.max(1, staffPage), staffTotalPages)
+    const start = (safePage - 1) * size
+    return filteredStaff.slice(start, start + size)
+  }, [filteredStaff, staffPage, staffPageSize, staffTotalPages])
 
   async function onDeleteCafe() {
     if (!window.confirm('Delete your cafe? This will remove menu items, images, and capacities.')) return
@@ -660,6 +701,41 @@ export default function OwnerDashboard() {
     })()
   }, [ownerUsername])
 
+  useEffect(() => {
+    if (!ownerUsername) return
+    if (hasCafe) return
+    if (didPrefillCafe) return
+
+    ;(async () => {
+      try {
+        const me = await getOwnerMe(ownerUsername)
+        const pd = me?.personalDetails || {}
+        const addr = me?.address || {}
+        const fullName = [pd.firstName, pd.lastName].filter(Boolean).join(' ').trim()
+
+        setCafe((prev) => {
+          const c = prev && typeof prev === 'object' ? { ...prev } : {}
+
+          if (!String(c.ownerNames || '').trim() && fullName) c.ownerNames = fullName
+          if (!String(c.phone || '').trim() && pd.phone) c.phone = String(pd.phone)
+          if (!String(c.whatsappNumber || '').trim() && (pd.contactNo || pd.phone)) c.whatsappNumber = String(pd.contactNo || pd.phone)
+          if (!String(c.email || '').trim() && pd.email) c.email = String(pd.email)
+
+          if (!String(c.addressLine || '').trim() && addr.street) c.addressLine = String(addr.street)
+          if (!String(c.city || '').trim() && addr.city) c.city = String(addr.city)
+          if (!String(c.state || '').trim() && addr.state) c.state = String(addr.state)
+          if (!String(c.pincode || '').trim() && addr.pincode) c.pincode = String(addr.pincode)
+
+          return c
+        })
+      } catch (e) {
+        // ignore autofill errors
+      } finally {
+        setDidPrefillCafe(true)
+      }
+    })()
+  }, [ownerUsername, hasCafe, didPrefillCafe])
+
   function BookingsSection() {
     return (
       <div className="mt-6 rounded-2xl border border-black/10 bg-white/70 p-6">
@@ -691,8 +767,11 @@ export default function OwnerDashboard() {
                   <th className="px-3 py-2">Date</th>
                   <th className="px-3 py-2">Time</th>
                   <th className="px-3 py-2">Guests</th>
+                  <th className="px-3 py-2">Preference</th>
+                  <th className="px-3 py-2">Allocated</th>
                   <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2">Note</th>
+                  <th className="px-3 py-2">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -704,19 +783,131 @@ export default function OwnerDashboard() {
                       <td className="px-3 py-2 text-slate-700">{b.bookingDate || '-'}</td>
                       <td className="px-3 py-2 text-slate-700">{b.bookingTime || '-'}</td>
                       <td className="px-3 py-2 text-slate-700">{b.guests ?? '-'}</td>
+                      <td className="px-3 py-2 text-slate-700">{b.amenityPreference || '-'}</td>
+                      <td className="px-3 py-2 text-slate-700">{b.allocatedTable || '-'}</td>
                       <td className="px-3 py-2 text-slate-700">{b.status || 'PENDING'}</td>
                       <td className="px-3 py-2 text-slate-600">{b.note || '-'}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+                            disabled={String(b.status || '').toUpperCase() === 'APPROVED'}
+                            onClick={async () => {
+                              setBookingsErr('')
+                              try {
+                                await approveOwnerBooking(ownerUsername, b.id)
+                                await refreshBookings()
+                              } catch (e) {
+                                const msg = e?.response?.data
+                                setBookingsErr(typeof msg === 'string' ? msg : 'Failed to approve booking')
+                              }
+                            }}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-500/15 disabled:opacity-60"
+                            disabled={String(b.status || '').toUpperCase() === 'DENIED'}
+                            onClick={() => {
+                              setDenyBookingId(b.id)
+                              setDenyReason('')
+                              setDenyOpen(true)
+                            }}
+                          >
+                            Deny
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-white/80"
+                            onClick={async () => {
+                              if (!window.confirm('Delete this booking request?')) return
+                              setBookingsErr('')
+                              try {
+                                await deleteOwnerBooking(ownerUsername, b.id)
+                                await refreshBookings()
+                              } catch (e) {
+                                const msg = e?.response?.data
+                                setBookingsErr(typeof msg === 'string' ? msg : 'Failed to delete booking')
+                              }
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                        {String(b.status || '').toUpperCase() === 'DENIED' && b.denialReason ? (
+                          <div className="mt-2 text-xs text-red-700">Reason: {b.denialReason}</div>
+                        ) : null}
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td className="px-3 py-4 text-slate-600" colSpan={7}>
+                    <td className="px-3 py-4 text-slate-600" colSpan={10}>
                       No bookings yet.
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
+          </div>
+        ) : null}
+
+        {denyOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-lg rounded-2xl border border-black/10 bg-white p-5">
+              <div className="text-sm font-extrabold">Deny booking</div>
+              <div className="mt-1 text-xs text-slate-600">Please provide a reason. This will be shown to the customer.</div>
+
+              <div className="mt-4 grid gap-2">
+                <div className="text-xs font-semibold text-slate-600">Reason *</div>
+                <textarea
+                  className="min-h-24 rounded-xl border border-black/10 bg-white px-4 py-2 text-sm outline-none"
+                  value={denyReason}
+                  onChange={(e) => setDenyReason(e.target.value)}
+                  placeholder="e.g. No tables available at this time"
+                />
+              </div>
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm"
+                  onClick={() => {
+                    if (denyBusy) return
+                    setDenyOpen(false)
+                    setDenyBookingId(null)
+                    setDenyReason('')
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-60"
+                  disabled={denyBusy}
+                  onClick={async () => {
+                    setBookingsErr('')
+                    setDenyBusy(true)
+                    try {
+                      await denyOwnerBooking(ownerUsername, denyBookingId, { reason: denyReason })
+                      setDenyOpen(false)
+                      setDenyBookingId(null)
+                      setDenyReason('')
+                      await refreshBookings()
+                    } catch (e) {
+                      const msg = e?.response?.data
+                      setBookingsErr(typeof msg === 'string' ? msg : 'Failed to deny booking')
+                    } finally {
+                      setDenyBusy(false)
+                    }
+                  }}
+                >
+                  Deny booking
+                </button>
+              </div>
+            </div>
           </div>
         ) : null}
       </div>
@@ -755,6 +946,7 @@ export default function OwnerDashboard() {
                       <div className="mt-1 text-xs text-slate-600">
                         {o.customerName || '-'} • {o.customerPhone || '-'} • {o.status || 'PLACED'}
                       </div>
+                      <div className="mt-1 text-xs text-slate-600">Preference: {o.amenityPreference || '-'} • Allocated: {o.allocatedTable || '-'}</div>
                     </div>
                     <div className="text-sm font-extrabold">₹{o.totalAmount ?? 0}</div>
                   </div>
@@ -2071,14 +2263,46 @@ export default function OwnerDashboard() {
               <div className="text-sm font-semibold">Staff list</div>
               <div className="mt-1 text-xs text-slate-600">Your cafe’s registered staff accounts.</div>
             </div>
-            <button
-              type="button"
-              className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm hover:bg-white"
-              onClick={() => refreshStaff()}
-              disabled={staffLoading}
-            >
-              Refresh
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 text-sm text-slate-700">
+                <span>Show</span>
+                <select
+                  value={staffPageSize}
+                  onChange={(e) => {
+                    setStaffPageSize(Number(e.target.value) || 10)
+                    setStaffPage(1)
+                  }}
+                  className="rounded-lg border border-black/10 bg-white px-2 py-1"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+                <span>entries</span>
+              </div>
+
+              <div className="flex items-center gap-2 text-sm text-slate-700">
+                <span>Search:</span>
+                <input
+                  value={staffQ}
+                  onChange={(e) => {
+                    setStaffQ(e.target.value)
+                    setStaffPage(1)
+                  }}
+                  className="w-56 rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                  placeholder="username / role / email"
+                />
+              </div>
+
+              <button
+                type="button"
+                className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm hover:bg-white"
+                onClick={() => refreshStaff()}
+                disabled={staffLoading}
+              >
+                Refresh
+              </button>
+            </div>
           </div>
 
           {staffLoading ? <div className="p-5 text-sm text-slate-600">Loading...</div> : null}
@@ -2097,14 +2321,14 @@ export default function OwnerDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/10">
-                {staff.length === 0 ? (
+                {filteredStaff.length === 0 ? (
                   <tr>
                     <td className="px-5 py-6 text-slate-600" colSpan={7}>
                       No staff yet.
                     </td>
                   </tr>
                 ) : (
-                  staff.map((u) => (
+                  pagedStaff.map((u) => (
                     <tr key={u.id} className="hover:bg-white">
                       <td className="px-5 py-3 text-slate-700">{u.id}</td>
                       <td className="px-5 py-3 font-semibold text-slate-900">{u.username}</td>
@@ -2129,6 +2353,36 @@ export default function OwnerDashboard() {
               </tbody>
             </table>
           </div>
+
+          {filteredStaff.length > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/10 p-4 text-sm text-slate-700">
+              <div>
+                Showing {(Math.min(Math.max(1, staffPage), staffTotalPages) - 1) * (Number(staffPageSize) || 10) + 1} to{' '}
+                {Math.min(Math.min(Math.max(1, staffPage), staffTotalPages) * (Number(staffPageSize) || 10), filteredStaff.length)} of {filteredStaff.length} entries
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                  onClick={() => setStaffPage((p) => Math.max(1, p - 1))}
+                  disabled={staffPage <= 1}
+                >
+                  Prev
+                </button>
+                <div className="text-xs">
+                  Page {Math.min(Math.max(1, staffPage), staffTotalPages)} of {staffTotalPages}
+                </div>
+                <button
+                  type="button"
+                  className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                  onClick={() => setStaffPage((p) => Math.min(staffTotalPages, p + 1))}
+                  disabled={staffPage >= staffTotalPages}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     )

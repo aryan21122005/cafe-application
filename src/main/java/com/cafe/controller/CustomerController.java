@@ -17,6 +17,7 @@ import com.cafe.repository.CafeOrderRepository;
 import com.cafe.repository.CafeRepository;
 import com.cafe.repository.MenuItemRepository;
 import com.cafe.repository.UserRepository;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -44,11 +45,76 @@ public class CustomerController {
     @Autowired
     private CafeOrderRepository cafeOrderRepository;
 
+    @GetMapping("/bookings")
+    public ResponseEntity<List<CafeBookingRow>> listMyBookings(
+            @RequestHeader(value = "X-USERNAME", required = false) String customerUsername
+    ) {
+        try {
+            User customer = requireCustomer(customerUsername);
+            if (customer == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+
+            List<CafeBooking> list = cafeBookingRepository.findByCustomerUsernameOrderByCreatedAtDesc(customer.getUsername());
+
+            if ((list == null || list.isEmpty())
+                    && customer.getPersonalDetails() != null
+                    && customer.getPersonalDetails().getPhone() != null
+                    && !customer.getPersonalDetails().getPhone().isBlank()) {
+                String phone = customer.getPersonalDetails().getPhone().trim();
+                List<CafeBooking> legacy = cafeBookingRepository.findByCustomerPhoneOrderByCreatedAtDesc(phone);
+                if (legacy != null && !legacy.isEmpty()) {
+                    for (CafeBooking b : legacy) {
+                        if (b != null && (b.getCustomerUsername() == null || b.getCustomerUsername().isBlank())) {
+                            b.setCustomerUsername(customer.getUsername());
+                            cafeBookingRepository.save(b);
+                        }
+                    }
+                    list = cafeBookingRepository.findByCustomerUsernameOrderByCreatedAtDesc(customer.getUsername());
+                }
+            }
+
+            List<CafeBookingRow> rows = (list == null ? List.<CafeBookingRow>of() : list.stream().map(this::toBookingRow).toList());
+            return ResponseEntity.ok(rows);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @DeleteMapping("/bookings/{id}")
+    public ResponseEntity<String> deleteMyBooking(
+            @RequestHeader(value = "X-USERNAME", required = false) String customerUsername,
+            @PathVariable Long id
+    ) {
+        try {
+            User customer = requireCustomer(customerUsername);
+            if (customer == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            if (id == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            CafeBooking b = cafeBookingRepository.findById(id).orElse(null);
+            if (b == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Booking not found");
+            }
+            if (b.getCustomerUsername() == null || !b.getCustomerUsername().equals(customer.getUsername())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+
+            cafeBookingRepository.delete(b);
+            return ResponseEntity.ok("Deleted");
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
     @PostMapping("/cafes/{cafeId}/bookings")
     public ResponseEntity<CafeBookingRow> createBooking(
             @RequestHeader(value = "X-USERNAME", required = false) String customerUsername,
             @PathVariable Long cafeId,
-            @RequestBody CafeBookingRequest request
+            @Valid @RequestBody CafeBookingRequest request
     ) {
         try {
             User customer = requireCustomer(customerUsername);
@@ -70,6 +136,7 @@ public class CustomerController {
 
             CafeBooking b = new CafeBooking();
             b.setCafe(cafe);
+            b.setCustomerUsername(customer.getUsername());
             b.setCustomerName(request.getCustomerName().trim());
             b.setCustomerPhone(request.getCustomerPhone().trim());
             b.setBookingDate(request.getBookingDate().trim());
@@ -88,7 +155,7 @@ public class CustomerController {
     public ResponseEntity<CafeOrderRow> createOrder(
             @RequestHeader(value = "X-USERNAME", required = false) String customerUsername,
             @PathVariable Long cafeId,
-            @RequestBody CafeOrderRequest request
+            @Valid @RequestBody CafeOrderRequest request
     ) {
         try {
             User customer = requireCustomer(customerUsername);
@@ -168,6 +235,7 @@ public class CustomerController {
         r.setId(b.getId());
         r.setCafeId(b.getCafe() == null ? null : b.getCafe().getId());
         r.setCafeName(b.getCafe() == null ? null : b.getCafe().getCafeName());
+        r.setCustomerUsername(b.getCustomerUsername());
         r.setCustomerName(b.getCustomerName());
         r.setCustomerPhone(b.getCustomerPhone());
         r.setBookingDate(b.getBookingDate());
@@ -175,6 +243,9 @@ public class CustomerController {
         r.setGuests(b.getGuests());
         r.setNote(b.getNote());
         r.setStatus(b.getStatus());
+        r.setDenialReason(b.getDenialReason());
+        r.setAmenityPreference(b.getAmenityPreference());
+        r.setAllocatedTable(b.getAllocatedTable());
         r.setCreatedAt(b.getCreatedAt());
         return r;
     }

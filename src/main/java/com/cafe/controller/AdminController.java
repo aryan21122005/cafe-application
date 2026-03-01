@@ -11,6 +11,7 @@ import com.cafe.dto.RegisterRequest;
 import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.CafeDocumentRow;
 import com.cafe.service.AdminService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -61,7 +62,7 @@ public class AdminController {
 
     @PostMapping(value = "/owners", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<String> createOwner(
-            @RequestPart("data") RegisterRequest request,
+            @Valid @RequestPart("data") RegisterRequest request,
             @RequestPart(value = "documents", required = false) List<MultipartFile> documents
     ) {
         return adminService.createOwner(request, documents);
@@ -70,7 +71,7 @@ public class AdminController {
     @PostMapping(value = "/cafes", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<AdminCafeRow> createCafeForOwner(
             @RequestHeader(value = "X-OWNER-USERNAME", required = false) String ownerUsername,
-            @RequestBody CafeProfileRequest request
+            @Valid @RequestBody CafeProfileRequest request
     ) {
         return adminService.createCafeForOwner(ownerUsername, request);
     }
@@ -107,6 +108,11 @@ public class AdminController {
     @GetMapping("/users/{id}")
     public ResponseEntity<AdminUserDetail> getUserDetail(@PathVariable Long id) {
         return adminService.getUserDetail(id);
+    }
+
+    @GetMapping("/users/by-username/{username}")
+    public ResponseEntity<AdminUserDetail> getUserDetailByUsername(@PathVariable String username) {
+        return adminService.getUserDetailByUsername(username);
     }
 
     @PostMapping("/users/{id}/approve")

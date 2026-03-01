@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
-import { createCustomerBooking, createCustomerOrder, getPublicCafeDetail, listPublicCafeMenu } from '../../lib/api.js'
+import { createCustomerBooking, createCustomerOrder, getPublicCafeDetail, listPublicCafeImages, listPublicCafeMenu } from '../../lib/api.js'
 import { useCustomerCart } from '../../lib/customerCart.jsx'
 import { getSession } from '../../lib/auth.js'
 
@@ -25,6 +25,8 @@ export default function CustomerCafePage() {
 
   const [cafe, setCafe] = useState(null)
   const [menu, setMenu] = useState([])
+  const [images, setImages] = useState([])
+  const [imgIdx, setImgIdx] = useState(0)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
 
@@ -36,12 +38,14 @@ export default function CustomerCafePage() {
   const [bookTime, setBookTime] = useState('')
   const [bookGuests, setBookGuests] = useState('2')
   const [bookNote, setBookNote] = useState('')
+  const [bookAmenity, setBookAmenity] = useState('')
   const [bookBusy, setBookBusy] = useState(false)
   const [bookMsg, setBookMsg] = useState('')
   const [bookErr, setBookErr] = useState('')
 
   const [orderName, setOrderName] = useState('')
   const [orderPhone, setOrderPhone] = useState('')
+  const [orderAmenity, setOrderAmenity] = useState('')
   const [orderBusy, setOrderBusy] = useState(false)
   const [orderMsg, setOrderMsg] = useState('')
   const [orderErr, setOrderErr] = useState('')
@@ -68,10 +72,15 @@ export default function CustomerCafePage() {
       setErr('')
       setLoading(true)
       try {
-        const [detail, items] = await Promise.all([getPublicCafeDetail(cafeId), listPublicCafeMenu(cafeId)])
+        const [detail, items, imgs] = await Promise.all([getPublicCafeDetail(cafeId), listPublicCafeMenu(cafeId), listPublicCafeImages(cafeId)])
         if (ignore) return
         setCafe(detail || null)
         setMenu(Array.isArray(items) ? items : [])
+        const urls = (Array.isArray(imgs) ? imgs : [])
+          .map((x) => x?.url)
+          .filter((u) => typeof u === 'string' && u.length > 0)
+        setImages(urls)
+        setImgIdx(0)
       } catch (e) {
         if (ignore) return
         setErr(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to load cafe')
@@ -111,6 +120,39 @@ export default function CustomerCafePage() {
             <div className="lg:col-span-2">
               <div className="rounded-2xl border border-black/10 bg-white/70 p-5">
                 <div className="text-sm font-semibold">Cafe info</div>
+
+                <div className="mt-4 overflow-hidden rounded-2xl border border-black/10 bg-white/70">
+                  <div className="relative h-56 w-full bg-slate-100">
+                    {images.length > 0 ? (
+                      <img src={images[Math.min(imgIdx, images.length - 1)]} alt="Cafe" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">No images</div>
+                    )}
+
+                    {images.length > 1 ? (
+                      <>
+                        <button
+                          type="button"
+                          className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 px-3 py-2 text-sm font-semibold text-white hover:bg-black/60"
+                          onClick={() => setImgIdx((i) => (i - 1 + images.length) % images.length)}
+                        >
+                          {'<'}
+                        </button>
+                        <button
+                          type="button"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 px-3 py-2 text-sm font-semibold text-white hover:bg-black/60"
+                          onClick={() => setImgIdx((i) => (i + 1) % images.length)}
+                        >
+                          {'>'}
+                        </button>
+                        <div className="absolute bottom-3 right-3 rounded-full bg-black/50 px-3 py-1 text-xs font-semibold text-white">
+                          {imgIdx + 1} / {images.length}
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+
                 <div className="mt-2 text-sm text-slate-700">{cafe?.description || 'No description.'}</div>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
                   <div className="rounded-xl border border-black/10 bg-white/70 px-4 py-3 text-xs text-slate-700">Phone: {cafe?.phone || '-'}</div>
@@ -151,6 +193,16 @@ export default function CustomerCafePage() {
                     <div className="text-xs font-semibold text-slate-600">Note</div>
                     <input className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm outline-none" value={bookNote} onChange={(e) => setBookNote(e.target.value)} placeholder="Any special request" />
                   </div>
+
+                  <div className="grid gap-1 md:col-span-2">
+                    <div className="text-xs font-semibold text-slate-600">Amenity preference</div>
+                    <select className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm outline-none" value={bookAmenity} onChange={(e) => setBookAmenity(e.target.value)}>
+                      <option value="">No preference</option>
+                      <option value="WINDOW">Beside window</option>
+                      <option value="QUIET">Quiet area</option>
+                      <option value="FAMILY">Family seating</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div className="mt-4">
@@ -169,7 +221,8 @@ export default function CustomerCafePage() {
                           bookingDate: bookDate,
                           bookingTime: bookTime,
                           guests: Number(bookGuests) || 0,
-                          note: bookNote
+                          note: bookNote,
+                          amenityPreference: bookAmenity || null
                         }
                         await createCustomerBooking(session?.username, cafeId, payload)
                         setBookMsg('Booking request created')
@@ -322,7 +375,7 @@ export default function CustomerCafePage() {
                             return
                           }
                           const items = Object.values(cart || {}).map((e) => ({ menuItemId: e?.item?.id, qty: e?.qty }))
-                          const payload = { customerName: orderName, customerPhone: orderPhone, items }
+                          const payload = { customerName: orderName, customerPhone: orderPhone, items, amenityPreference: orderAmenity || null }
                           await createCustomerOrder(session?.username, cafeId, payload)
                           clear()
                           setOrderMsg('Order placed')
@@ -346,6 +399,15 @@ export default function CustomerCafePage() {
                       <div className="grid gap-1">
                         <div className="text-xs font-semibold text-slate-600">Phone for order *</div>
                         <input className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none" value={orderPhone} onChange={(e) => setOrderPhone(e.target.value)} />
+                      </div>
+                      <div className="grid gap-1">
+                        <div className="text-xs font-semibold text-slate-600">Amenity preference</div>
+                        <select className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none" value={orderAmenity} onChange={(e) => setOrderAmenity(e.target.value)}>
+                          <option value="">No preference</option>
+                          <option value="WINDOW">Beside window</option>
+                          <option value="QUIET">Quiet area</option>
+                          <option value="FAMILY">Family seating</option>
+                        </select>
                       </div>
                     </div>
                   </div>

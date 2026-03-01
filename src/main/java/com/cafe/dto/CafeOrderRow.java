@@ -17,6 +17,8 @@ public class CafeOrderRow {
     private String customerPhone;
     private String status;
     private Double totalAmount;
+    private String amenityPreference;
+    private String allocatedTable;
     private Long createdAt;
 
     private List<CafeOrderItemRow> items;

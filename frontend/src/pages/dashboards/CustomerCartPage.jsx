@@ -11,6 +11,7 @@ export default function CustomerCartPage() {
 
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const [amenity, setAmenity] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
@@ -83,6 +84,15 @@ export default function CustomerCartPage() {
                 <div className="text-xs font-semibold text-slate-600">Phone *</div>
                 <input className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none" value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
+              <div className="grid gap-1">
+                <div className="text-xs font-semibold text-slate-600">Amenity preference</div>
+                <select className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none" value={amenity} onChange={(e) => setAmenity(e.target.value)}>
+                  <option value="">No preference</option>
+                  <option value="WINDOW">Beside window</option>
+                  <option value="QUIET">Quiet area</option>
+                  <option value="FAMILY">Family seating</option>
+                </select>
+              </div>
             </div>
 
             <button
@@ -99,7 +109,7 @@ export default function CustomerCartPage() {
                     return
                   }
                   const itemsPayload = Object.values(cart || {}).map((e) => ({ menuItemId: e?.item?.id, qty: e?.qty }))
-                  const payload = { customerName: name, customerPhone: phone, items: itemsPayload }
+                  const payload = { customerName: name, customerPhone: phone, items: itemsPayload, amenityPreference: amenity || null }
                   await createCustomerOrder(session?.username, cafeId, payload)
                   clear()
                   setMsg('Order placed')

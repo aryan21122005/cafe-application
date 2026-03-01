@@ -35,6 +35,10 @@ public class CafeOrder {
     @Column(nullable = false)
     private Double totalAmount = 0.0;
 
+    private String amenityPreference;
+
+    private String allocatedTable;
+
     @Column(nullable = false)
     private Long createdAt = System.currentTimeMillis();
 

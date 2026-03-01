@@ -1,9 +1,12 @@
 package com.cafe.service.impl;
 
-import com.cafe.dto.CafeProfileRequest;
-import com.cafe.dto.CafeProfileResponse;
+import com.cafe.dto.CafeBookingRow;
 import com.cafe.dto.CafeDocumentRow;
 import com.cafe.dto.CafeImageRow;
+import com.cafe.dto.CafeOrderRow;
+import com.cafe.dto.CafeProfileRequest;
+import com.cafe.dto.CafeProfileResponse;
+import com.cafe.dto.AdminUserDetail;
 import com.cafe.dto.FunctionCapacityRequest;
 import com.cafe.dto.FunctionCapacityRow;
 import com.cafe.dto.MenuItemRequest;
@@ -13,6 +16,7 @@ import com.cafe.dto.OwnerStaffRow;
 import com.cafe.dto.CafeBookingRow;
 import com.cafe.dto.CafeOrderRow;
 import com.cafe.dto.CafeOrderItemRow;
+import com.cafe.dto.BookingDecisionRequest;
 import com.cafe.entity.ApprovalStatus;
 import com.cafe.entity.Cafe;
 import com.cafe.entity.CafeDocument;
@@ -119,6 +123,161 @@ public class OwnerServiceImpl implements OwnerService {
             List<CafeDocument> docs = cafeDocumentRepository.findByCafeId(cafe.getId());
             List<CafeDocumentRow> rows = docs.stream().map(this::toCafeDocumentRow).toList();
             return ResponseEntity.ok(rows);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<AdminUserDetail> getMe(String ownerUsername) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+
+            AdminUserDetail detail = new AdminUserDetail();
+            detail.setId(owner.getId());
+            detail.setUsername(owner.getUsername());
+            detail.setRole(owner.getRole() == null ? null : owner.getRole().name());
+            detail.setApprovalStatus(owner.getApprovalStatus() == null ? null : owner.getApprovalStatus().name());
+            detail.setForcePasswordChange(owner.getForcePasswordChange());
+
+            PersonalDetails pd = owner.getPersonalDetails();
+            if (pd != null) {
+                AdminUserDetail.PersonalDetailsDto pdd = new AdminUserDetail.PersonalDetailsDto();
+                pdd.setId(pd.getId());
+                pdd.setFirstName(pd.getFirstName());
+                pdd.setLastName(pd.getLastName());
+                pdd.setEmail(pd.getEmail());
+                pdd.setPhone(pd.getPhone());
+                pdd.setContactNo(pd.getContactNo());
+                pdd.setGender(pd.getGender());
+                pdd.setMaritalStatus(pd.getMaritalStatus());
+                detail.setPersonalDetails(pdd);
+            }
+
+            Address a = owner.getAddress();
+            if (a != null) {
+                AdminUserDetail.AddressDto ad = new AdminUserDetail.AddressDto();
+                ad.setId(a.getId());
+                ad.setStreet(a.getStreet());
+                ad.setCity(a.getCity());
+                ad.setState(a.getState());
+                ad.setPincode(a.getPincode());
+                detail.setAddress(ad);
+            }
+
+            return ResponseEntity.ok(detail);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    private String allocateDineInTable(Long cafeId) {
+        FunctionCapacity cap = functionCapacityRepository.findByCafeIdAndFunctionType(cafeId, FunctionType.DINE_IN).orElse(null);
+        if (cap == null) return null;
+        if (!Boolean.TRUE.equals(cap.getEnabled())) return null;
+        Integer available = cap.getTablesAvailable();
+        if (available == null || available <= 0) return null;
+
+        cap.setTablesAvailable(available - 1);
+        functionCapacityRepository.save(cap);
+        return "DINE_IN_TABLE_" + System.currentTimeMillis();
+    }
+
+    @Override
+    public ResponseEntity<String> deleteBooking(String ownerUsername, Long bookingId) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (bookingId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            CafeBooking b = cafeBookingRepository.findByIdAndCafeId(bookingId, cafe.getId()).orElse(null);
+            if (b == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Booking not found");
+            }
+
+            cafeBookingRepository.delete(b);
+            return ResponseEntity.ok("Deleted");
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<CafeBookingRow> approveBooking(String ownerUsername, Long bookingId) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (bookingId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            CafeBooking b = cafeBookingRepository.findByIdAndCafeId(bookingId, cafe.getId()).orElse(null);
+            if (b == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            String allocated = allocateDineInTable(cafe.getId());
+            if (allocated == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            b.setAllocatedTable(allocated);
+
+            b.setStatus("APPROVED");
+            b.setDenialReason(null);
+            cafeBookingRepository.save(b);
+
+            return ResponseEntity.ok(toBookingRow(b));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<CafeBookingRow> denyBooking(String ownerUsername, Long bookingId, BookingDecisionRequest request) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (bookingId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (request == null || request.getReason() == null || request.getReason().isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            CafeBooking b = cafeBookingRepository.findByIdAndCafeId(bookingId, cafe.getId()).orElse(null);
+            if (b == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            b.setStatus("DENIED");
+            b.setDenialReason(request.getReason().trim());
+            cafeBookingRepository.save(b);
+
+            return ResponseEntity.ok(toBookingRow(b));
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
@@ -369,6 +528,7 @@ public class OwnerServiceImpl implements OwnerService {
         r.setId(b.getId());
         r.setCafeId(b.getCafe() == null ? null : b.getCafe().getId());
         r.setCafeName(b.getCafe() == null ? null : b.getCafe().getCafeName());
+        r.setCustomerUsername(b.getCustomerUsername());
         r.setCustomerName(b.getCustomerName());
         r.setCustomerPhone(b.getCustomerPhone());
         r.setBookingDate(b.getBookingDate());
@@ -376,6 +536,9 @@ public class OwnerServiceImpl implements OwnerService {
         r.setGuests(b.getGuests());
         r.setNote(b.getNote());
         r.setStatus(b.getStatus());
+        r.setDenialReason(b.getDenialReason());
+        r.setAmenityPreference(b.getAmenityPreference());
+        r.setAllocatedTable(b.getAllocatedTable());
         r.setCreatedAt(b.getCreatedAt());
         return r;
     }
@@ -389,6 +552,8 @@ public class OwnerServiceImpl implements OwnerService {
         r.setCustomerPhone(o.getCustomerPhone());
         r.setStatus(o.getStatus());
         r.setTotalAmount(o.getTotalAmount());
+        r.setAmenityPreference(o.getAmenityPreference());
+        r.setAllocatedTable(o.getAllocatedTable());
         r.setCreatedAt(o.getCreatedAt());
         if (o.getItems() != null) {
             r.setItems(o.getItems().stream().map(this::toOrderItemRow).toList());

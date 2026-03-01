@@ -108,6 +108,11 @@ export async function getPublicCafeDetail(cafeId) {
   return res.data
 }
 
+export async function listPublicCafeImages(cafeId) {
+  const res = await api.get(`/api/public/cafes/${cafeId}/images`)
+  return res.data
+}
+
 export async function listPublicCafeMenu(cafeId) {
   const res = await api.get(`/api/public/cafes/${cafeId}/menu`)
   return res.data
@@ -115,6 +120,24 @@ export async function listPublicCafeMenu(cafeId) {
 
 export async function createCustomerBooking(username, cafeId, payload) {
   const res = await api.post(`/api/customer/cafes/${cafeId}/bookings`, payload, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function listCustomerBookings(username) {
+  const res = await api.get('/api/customer/bookings', {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function deleteCustomerBooking(username, bookingId) {
+  const res = await api.delete(`/api/customer/bookings/${bookingId}`, {
     headers: {
       'X-USERNAME': username
     }
@@ -133,6 +156,11 @@ export async function createCustomerOrder(username, cafeId, payload) {
 
 export async function getUserDetail(id) {
   const res = await api.get(`/api/admin/users/${id}`)
+  return res.data
+}
+
+export async function getUserDetailByUsername(username) {
+  const res = await api.get(`/api/admin/users/by-username/${encodeURIComponent(username)}`)
   return res.data
 }
 
@@ -165,8 +193,44 @@ export async function getOwnerCafe(username) {
   return res.data
 }
 
+export async function getOwnerMe(username) {
+  const res = await api.get('/api/owner/me', {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
 export async function listOwnerBookings(username) {
   const res = await api.get('/api/owner/bookings', {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function approveOwnerBooking(username, bookingId) {
+  const res = await api.post(`/api/owner/bookings/${bookingId}/approve`, null, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function denyOwnerBooking(username, bookingId, payload) {
+  const res = await api.post(`/api/owner/bookings/${bookingId}/deny`, payload, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function deleteOwnerBooking(username, bookingId) {
+  const res = await api.delete(`/api/owner/bookings/${bookingId}`, {
     headers: {
       'X-USERNAME': username
     }

@@ -11,6 +11,8 @@ public class CafeBookingRow {
     private Long cafeId;
     private String cafeName;
 
+    private String customerUsername;
+
     private String customerName;
     private String customerPhone;
     private String bookingDate;
@@ -18,5 +20,8 @@ public class CafeBookingRow {
     private Integer guests;
     private String note;
     private String status;
+    private String denialReason;
+    private String amenityPreference;
+    private String allocatedTable;
     private Long createdAt;
 }

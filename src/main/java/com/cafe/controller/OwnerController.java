@@ -2,6 +2,7 @@ package com.cafe.controller;
 
 import com.cafe.dto.CafeProfileRequest;
 import com.cafe.dto.CafeProfileResponse;
+import com.cafe.dto.AdminUserDetail;
 import com.cafe.dto.CafeImageRow;
 import com.cafe.dto.FunctionCapacityRequest;
 import com.cafe.dto.FunctionCapacityRow;
@@ -12,7 +13,9 @@ import com.cafe.dto.OwnerStaffRow;
 import com.cafe.dto.CafeDocumentRow;
 import com.cafe.dto.CafeBookingRow;
 import com.cafe.dto.CafeOrderRow;
+import com.cafe.dto.BookingDecisionRequest;
 import com.cafe.service.OwnerService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -35,10 +38,17 @@ public class OwnerController {
         return ownerService.getCafe(ownerUsername);
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<AdminUserDetail> getMe(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername
+    ) {
+        return ownerService.getMe(ownerUsername);
+    }
+
     @PutMapping(value = "/cafe", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<CafeProfileResponse> upsertCafe(
             @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
-            @RequestBody CafeProfileRequest request
+            @Valid @RequestBody CafeProfileRequest request
     ) {
         return ownerService.upsertCafe(ownerUsername, request);
     }
@@ -46,7 +56,7 @@ public class OwnerController {
     @PutMapping(value = "/cafe", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CafeProfileResponse> upsertCafeWithDocuments(
             @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
-            @RequestPart("data") CafeProfileRequest request,
+            @Valid @RequestPart("data") CafeProfileRequest request,
             @RequestPart(value = "docKeys", required = false) List<String> docKeys,
             @RequestPart(value = "documents", required = false) List<MultipartFile> documents
     ) {
@@ -94,7 +104,7 @@ public class OwnerController {
     @PostMapping("/staff")
     public ResponseEntity<String> createStaff(
             @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
-            @RequestBody OwnerStaffCreateRequest request
+            @Valid @RequestBody OwnerStaffCreateRequest request
     ) {
         return ownerService.createStaff(ownerUsername, request);
     }
@@ -102,7 +112,7 @@ public class OwnerController {
     @PostMapping(value = "/staff", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<String> createStaffWithDocuments(
             @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
-            @RequestPart("data") OwnerStaffCreateRequest request,
+            @Valid @RequestPart("data") OwnerStaffCreateRequest request,
             @RequestPart(value = "documents", required = false) List<MultipartFile> documents
     ) {
         return ownerService.createStaffWithDocuments(ownerUsername, request, documents);
@@ -126,7 +136,7 @@ public class OwnerController {
     @PostMapping("/menu")
     public ResponseEntity<MenuItemRow> createMenuItem(
             @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
-            @RequestBody MenuItemRequest request
+            @Valid @RequestBody MenuItemRequest request
     ) {
         return ownerService.createMenuItem(ownerUsername, request);
     }
@@ -135,7 +145,7 @@ public class OwnerController {
     public ResponseEntity<MenuItemRow> updateMenuItem(
             @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
             @PathVariable Long id,
-            @RequestBody MenuItemRequest request
+            @Valid @RequestBody MenuItemRequest request
     ) {
         return ownerService.updateMenuItem(ownerUsername, id, request);
     }
@@ -167,7 +177,7 @@ public class OwnerController {
     @PostMapping("/capacities")
     public ResponseEntity<FunctionCapacityRow> upsertCapacity(
             @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
-            @RequestBody FunctionCapacityRequest request
+            @Valid @RequestBody FunctionCapacityRequest request
     ) {
         return ownerService.upsertCapacity(ownerUsername, request);
     }
@@ -209,6 +219,31 @@ public class OwnerController {
             @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername
     ) {
         return ownerService.listBookings(ownerUsername);
+    }
+
+    @PostMapping("/bookings/{id}/approve")
+    public ResponseEntity<CafeBookingRow> approveBooking(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
+            @PathVariable Long id
+    ) {
+        return ownerService.approveBooking(ownerUsername, id);
+    }
+
+    @PostMapping("/bookings/{id}/deny")
+    public ResponseEntity<CafeBookingRow> denyBooking(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
+            @PathVariable Long id,
+            @Valid @RequestBody BookingDecisionRequest request
+    ) {
+        return ownerService.denyBooking(ownerUsername, id, request);
+    }
+
+    @DeleteMapping("/bookings/{id}")
+    public ResponseEntity<String> deleteBooking(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
+            @PathVariable Long id
+    ) {
+        return ownerService.deleteBooking(ownerUsername, id);
     }
 
     @GetMapping("/orders")

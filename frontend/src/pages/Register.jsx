@@ -71,12 +71,18 @@ export default function Register() {
       return (
         personalDetails.firstName.trim().length > 0 &&
         personalDetails.lastName.trim().length > 0 &&
-        personalDetails.email.trim().length > 0
+        personalDetails.email.trim().length > 0 &&
+        personalDetails.phone.trim().length > 0
       )
     }
 
     if (step === 2) {
-      return address.city.trim().length > 0
+      return (
+        address.street.trim().length > 0 &&
+        address.city.trim().length > 0 &&
+        address.state.trim().length > 0 &&
+        address.pincode.trim().length > 0
+      )
     }
 
     if (step === 3) {
@@ -100,7 +106,11 @@ export default function Register() {
       personalDetails.firstName.trim() &&
       personalDetails.lastName.trim() &&
       personalDetails.email.trim() &&
+      personalDetails.phone.trim() &&
+      address.street.trim() &&
       address.city.trim() &&
+      address.state.trim() &&
+      address.pincode.trim() &&
       documents.length > 0
     )
   }, [role, personalDetails, address, documents.length])

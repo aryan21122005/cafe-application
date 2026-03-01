@@ -20,6 +20,9 @@ public class CafeBooking {
     @JoinColumn(name = "cafe_id")
     private Cafe cafe;
 
+    @Column
+    private String customerUsername;
+
     @Column(nullable = false)
     private String customerName;
 
@@ -37,8 +40,14 @@ public class CafeBooking {
 
     private String note;
 
+    private String amenityPreference;
+
+    private String allocatedTable;
+
     @Column(nullable = false)
     private String status = "PENDING";
+
+    private String denialReason;
 
     @Column(nullable = false)
     private Long createdAt = System.currentTimeMillis();

@@ -43,6 +43,8 @@ public interface AdminService {
 
     ResponseEntity<AdminUserDetail> getUserDetail(Long id);
 
+    ResponseEntity<AdminUserDetail> getUserDetailByUsername(String username);
+
     ResponseEntity<String> approveUser(Long id);
 
     ResponseEntity<String> denyUser(Long id, AdminDecisionRequest request);

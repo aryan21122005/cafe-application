@@ -3,6 +3,8 @@ package com.cafe.dto;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.List;
+
 @Getter
 @Setter
 public class PublicCafeCardRow {
@@ -14,4 +16,6 @@ public class PublicCafeCardRow {
     private Boolean active;
     private String approvalStatus;
     private String coverImageUrl;
+
+    private List<String> imageUrls;
 }
