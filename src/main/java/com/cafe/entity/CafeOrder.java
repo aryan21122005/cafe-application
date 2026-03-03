@@ -26,6 +26,8 @@ public class CafeOrder {
     @Column(nullable = false)
     private String customerName;
 
+    private String customerUsername;
+
     @Column(nullable = false)
     private String customerPhone;
 

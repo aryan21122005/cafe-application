@@ -17,10 +17,18 @@ import com.cafe.repository.CafeImageRepository;
 import com.cafe.repository.CafeDocumentRepository;
 import com.cafe.repository.DocumentRepository;
 import com.cafe.repository.FunctionCapacityRepository;
+import com.cafe.repository.CafeOrderRepository;
+import com.cafe.repository.CafeBookingRepository;
 import com.cafe.repository.MenuItemRepository;
 import com.cafe.repository.UserRepository;
 import com.cafe.service.AdminService;
 import com.cafe.service.EmailService;
+import com.cafe.dto.AdminAnalyticsSummary;
+import com.cafe.dto.AdminAnalyticsDetailsResponse;
+import com.cafe.dto.AdminCafeMetricRow;
+import com.cafe.dto.AdminCityMetricRow;
+import com.cafe.dto.AdminHourMetricRow;
+import com.cafe.dto.AdminItemMetricRow;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,8 +43,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import org.springframework.web.multipart.MultipartFile;
 
@@ -59,6 +79,12 @@ public class AdminServiceImpl implements AdminService {
 
     @Autowired
     private MenuItemRepository menuItemRepository;
+
+    @Autowired
+    private CafeOrderRepository cafeOrderRepository;
+
+    @Autowired
+    private CafeBookingRepository cafeBookingRepository;
 
     @Autowired
     private FunctionCapacityRepository functionCapacityRepository;
@@ -103,6 +129,315 @@ public class AdminServiceImpl implements AdminService {
             }).toList();
 
             return ResponseEntity.ok(rows);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<byte[]> exportCafeHistoryExcel(Long cafeId) {
+        try {
+            if (cafeId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            List<CafeOrder> orders = cafeOrderRepository.findByCafeIdOrderByCreatedAtDesc(cafeId);
+            List<CafeBooking> bookings = cafeBookingRepository.findByCafeIdOrderByCreatedAtDesc(cafeId);
+
+            try (Workbook wb = new XSSFWorkbook(); ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+                Sheet sOrders = wb.createSheet("Orders");
+                int r = 0;
+
+                Row h = sOrders.createRow(r++);
+                int c = 0;
+                h.createCell(c++).setCellValue("OrderId");
+                h.createCell(c++).setCellValue("CreatedAt");
+                h.createCell(c++).setCellValue("Status");
+                h.createCell(c++).setCellValue("CustomerUsername");
+                h.createCell(c++).setCellValue("CustomerName");
+                h.createCell(c++).setCellValue("CustomerPhone");
+                h.createCell(c++).setCellValue("AllocatedTable");
+                h.createCell(c++).setCellValue("AmenityPreference");
+                h.createCell(c++).setCellValue("TotalAmount");
+
+                if (orders != null) {
+                    for (CafeOrder o : orders) {
+                        if (o == null) continue;
+                        Row rr = sOrders.createRow(r++);
+                        int cc = 0;
+                        rr.createCell(cc++).setCellValue(o.getId() == null ? 0 : o.getId());
+                        rr.createCell(cc++).setCellValue(o.getCreatedAt() == null ? 0 : o.getCreatedAt());
+                        rr.createCell(cc++).setCellValue(o.getStatus() == null ? "" : o.getStatus());
+                        rr.createCell(cc++).setCellValue(o.getCustomerUsername() == null ? "" : o.getCustomerUsername());
+                        rr.createCell(cc++).setCellValue(o.getCustomerName() == null ? "" : o.getCustomerName());
+                        rr.createCell(cc++).setCellValue(o.getCustomerPhone() == null ? "" : o.getCustomerPhone());
+                        rr.createCell(cc++).setCellValue(o.getAllocatedTable() == null ? "" : o.getAllocatedTable());
+                        rr.createCell(cc++).setCellValue(o.getAmenityPreference() == null ? "" : o.getAmenityPreference());
+                        rr.createCell(cc++).setCellValue(o.getTotalAmount() == null ? 0.0 : o.getTotalAmount());
+                    }
+                }
+                for (int i = 0; i < 9; i++) sOrders.autoSizeColumn(i);
+
+                Sheet sBookings = wb.createSheet("Bookings");
+                int br = 0;
+                Row bh = sBookings.createRow(br++);
+                int bc = 0;
+                bh.createCell(bc++).setCellValue("BookingId");
+                bh.createCell(bc++).setCellValue("CreatedAt");
+                bh.createCell(bc++).setCellValue("Status");
+                bh.createCell(bc++).setCellValue("CustomerUsername");
+                bh.createCell(bc++).setCellValue("CustomerName");
+                bh.createCell(bc++).setCellValue("CustomerPhone");
+                bh.createCell(bc++).setCellValue("BookingDate");
+                bh.createCell(bc++).setCellValue("BookingTime");
+                bh.createCell(bc++).setCellValue("Guests");
+                bh.createCell(bc++).setCellValue("AllocatedTable");
+                bh.createCell(bc++).setCellValue("AmenityPreference");
+                bh.createCell(bc++).setCellValue("DenialReason");
+
+                if (bookings != null) {
+                    for (CafeBooking b : bookings) {
+                        if (b == null) continue;
+                        Row rr = sBookings.createRow(br++);
+                        int cc = 0;
+                        rr.createCell(cc++).setCellValue(b.getId() == null ? 0 : b.getId());
+                        rr.createCell(cc++).setCellValue(b.getCreatedAt() == null ? 0 : b.getCreatedAt());
+                        rr.createCell(cc++).setCellValue(b.getStatus() == null ? "" : b.getStatus());
+                        rr.createCell(cc++).setCellValue(b.getCustomerUsername() == null ? "" : b.getCustomerUsername());
+                        rr.createCell(cc++).setCellValue(b.getCustomerName() == null ? "" : b.getCustomerName());
+                        rr.createCell(cc++).setCellValue(b.getCustomerPhone() == null ? "" : b.getCustomerPhone());
+                        rr.createCell(cc++).setCellValue(b.getBookingDate() == null ? "" : b.getBookingDate());
+                        rr.createCell(cc++).setCellValue(b.getBookingTime() == null ? "" : b.getBookingTime());
+                        rr.createCell(cc++).setCellValue(b.getGuests() == null ? 0 : b.getGuests());
+                        rr.createCell(cc++).setCellValue(b.getAllocatedTable() == null ? "" : b.getAllocatedTable());
+                        rr.createCell(cc++).setCellValue(b.getAmenityPreference() == null ? "" : b.getAmenityPreference());
+                        rr.createCell(cc++).setCellValue(b.getDenialReason() == null ? "" : b.getDenialReason());
+                    }
+                }
+                for (int i = 0; i < 12; i++) sBookings.autoSizeColumn(i);
+
+                wb.write(bos);
+                byte[] bytes = bos.toByteArray();
+
+                String safeName = (cafe.getCafeName() == null ? "cafe" : cafe.getCafeName()).replaceAll("[^a-zA-Z0-9-_]+", "_");
+                String filename = safeName + "-history.xlsx";
+                return ResponseEntity.ok()
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                        .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                        .body(bytes);
+            } catch (IOException io) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            }
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<byte[]> exportCafeMenuExcel(Long cafeId) {
+        try {
+            if (cafeId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            List<MenuItem> menu = menuItemRepository.findByCafeId(cafeId);
+
+            try (Workbook wb = new XSSFWorkbook(); ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+                Sheet s = wb.createSheet("Menu");
+                int r = 0;
+                Row h = s.createRow(r++);
+                int c = 0;
+                h.createCell(c++).setCellValue("MenuItemId");
+                h.createCell(c++).setCellValue("Name");
+                h.createCell(c++).setCellValue("Category");
+                h.createCell(c++).setCellValue("Price");
+                h.createCell(c++).setCellValue("Available");
+                h.createCell(c++).setCellValue("CreatedAt");
+
+                if (menu != null) {
+                    for (MenuItem mi : menu) {
+                        if (mi == null) continue;
+                        Row rr = s.createRow(r++);
+                        int cc = 0;
+                        rr.createCell(cc++).setCellValue(mi.getId() == null ? 0 : mi.getId());
+                        rr.createCell(cc++).setCellValue(mi.getName() == null ? "" : mi.getName());
+                        rr.createCell(cc++).setCellValue(mi.getCategory() == null ? "" : mi.getCategory());
+                        rr.createCell(cc++).setCellValue(mi.getPrice() == null ? 0.0 : mi.getPrice());
+                        rr.createCell(cc++).setCellValue(mi.getAvailable() == null ? "" : String.valueOf(mi.getAvailable()));
+                        rr.createCell(cc++).setCellValue(mi.getCreatedAt() == null ? 0 : mi.getCreatedAt());
+                    }
+                }
+
+                for (int i = 0; i < 6; i++) s.autoSizeColumn(i);
+                wb.write(bos);
+                byte[] bytes = bos.toByteArray();
+
+                String safeName = (cafe.getCafeName() == null ? "cafe" : cafe.getCafeName()).replaceAll("[^a-zA-Z0-9-_]+", "_");
+                String filename = safeName + "-menu.xlsx";
+                return ResponseEntity.ok()
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                        .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                        .body(bytes);
+            } catch (IOException io) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            }
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<AdminAnalyticsSummary> getAnalyticsSummary() {
+        try {
+            long totalCafes = cafeRepository.count();
+            long totalOrders = cafeOrderRepository.count();
+            long totalBookings = cafeBookingRepository.count();
+
+            double revenue = 0.0;
+            List<CafeOrder> allOrders = cafeOrderRepository.findAll();
+            if (allOrders != null) {
+                for (CafeOrder o : allOrders) {
+                    if (o == null || o.getTotalAmount() == null) continue;
+                    revenue += o.getTotalAmount();
+                }
+            }
+
+            AdminAnalyticsSummary s = new AdminAnalyticsSummary();
+            s.setTotalCafes(totalCafes);
+            s.setTotalOrders(totalOrders);
+            s.setTotalBookings(totalBookings);
+            s.setTotalOrderRevenue(revenue);
+            return ResponseEntity.ok(s);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<AdminAnalyticsDetailsResponse> getAnalyticsDetails() {
+        try {
+            List<CafeOrder> orders = cafeOrderRepository.findAllWithItems();
+
+            Map<Long, AdminCafeMetricRow> byCafe = new HashMap<>();
+            Map<Long, AdminItemMetricRow> byItem = new HashMap<>();
+            Map<Integer, AdminHourMetricRow> byHour = new HashMap<>();
+            Map<String, AdminCityMetricRow> byCity = new HashMap<>();
+
+            long totalOrders = 0;
+            double totalRevenue = 0.0;
+
+            if (orders != null) {
+                for (CafeOrder o : orders) {
+                    if (o == null) continue;
+                    totalOrders++;
+                    double ordTotal = o.getTotalAmount() == null ? 0.0 : o.getTotalAmount();
+                    totalRevenue += ordTotal;
+
+                    Cafe cafe = o.getCafe();
+                    Long cafeId = cafe == null ? null : cafe.getId();
+                    if (cafeId != null) {
+                        AdminCafeMetricRow cm = byCafe.computeIfAbsent(cafeId, k -> {
+                            AdminCafeMetricRow r = new AdminCafeMetricRow();
+                            r.setCafeId(k);
+                            r.setCafeName(cafe.getCafeName());
+                            r.setCity(cafe.getCity());
+                            r.setOrderCount(0L);
+                            r.setOrderRevenue(0.0);
+                            return r;
+                        });
+                        cm.setOrderCount((cm.getOrderCount() == null ? 0L : cm.getOrderCount()) + 1);
+                        cm.setOrderRevenue((cm.getOrderRevenue() == null ? 0.0 : cm.getOrderRevenue()) + ordTotal);
+
+                        String cityKey = cafe.getCity() == null ? "Unknown" : cafe.getCity();
+                        AdminCityMetricRow city = byCity.computeIfAbsent(cityKey, k -> {
+                            AdminCityMetricRow r = new AdminCityMetricRow();
+                            r.setCity(k);
+                            r.setOrderCount(0L);
+                            r.setOrderRevenue(0.0);
+                            return r;
+                        });
+                        city.setOrderCount((city.getOrderCount() == null ? 0L : city.getOrderCount()) + 1);
+                        city.setOrderRevenue((city.getOrderRevenue() == null ? 0.0 : city.getOrderRevenue()) + ordTotal);
+                    }
+
+                    long createdAt = o.getCreatedAt() == null ? 0L : o.getCreatedAt();
+                    LocalDateTime dt = LocalDateTime.ofInstant(Instant.ofEpochMilli(createdAt), ZoneId.systemDefault());
+                    int hour = dt.getHour();
+                    AdminHourMetricRow hm = byHour.computeIfAbsent(hour, k -> {
+                        AdminHourMetricRow r = new AdminHourMetricRow();
+                        r.setHour(k);
+                        r.setOrderCount(0L);
+                        r.setOrderRevenue(0.0);
+                        return r;
+                    });
+                    hm.setOrderCount((hm.getOrderCount() == null ? 0L : hm.getOrderCount()) + 1);
+                    hm.setOrderRevenue((hm.getOrderRevenue() == null ? 0.0 : hm.getOrderRevenue()) + ordTotal);
+
+                    if (o.getItems() != null) {
+                        for (CafeOrderItem it : o.getItems()) {
+                            if (it == null) continue;
+                            Long itemId = it.getMenuItemId();
+                            if (itemId == null) continue;
+                            long qty = it.getQty() == null ? 0 : it.getQty();
+                            double rev = (it.getPrice() == null ? 0.0 : it.getPrice()) * qty;
+                            AdminItemMetricRow im = byItem.computeIfAbsent(itemId, k -> {
+                                AdminItemMetricRow r = new AdminItemMetricRow();
+                                r.setMenuItemId(k);
+                                r.setItemName(it.getItemName());
+                                r.setTotalQty(0L);
+                                r.setTotalRevenue(0.0);
+                                return r;
+                            });
+                            im.setTotalQty((im.getTotalQty() == null ? 0L : im.getTotalQty()) + qty);
+                            im.setTotalRevenue((im.getTotalRevenue() == null ? 0.0 : im.getTotalRevenue()) + rev);
+                        }
+                    }
+                }
+            }
+
+            long totalCafes = cafeRepository.count();
+            long totalBookings = cafeBookingRepository.count();
+
+            AdminAnalyticsSummary summary = new AdminAnalyticsSummary();
+            summary.setTotalCafes(totalCafes);
+            summary.setTotalOrders(totalOrders);
+            summary.setTotalBookings(totalBookings);
+            summary.setTotalOrderRevenue(totalRevenue);
+
+            List<AdminCafeMetricRow> topCafes = byCafe.values().stream()
+                    .sorted(Comparator.comparing((AdminCafeMetricRow r) -> r.getOrderRevenue() == null ? 0.0 : r.getOrderRevenue()).reversed())
+                    .limit(10)
+                    .toList();
+
+            List<AdminItemMetricRow> topItems = byItem.values().stream()
+                    .sorted(Comparator.comparing((AdminItemMetricRow r) -> r.getTotalQty() == null ? 0L : r.getTotalQty()).reversed())
+                    .limit(10)
+                    .toList();
+
+            List<AdminHourMetricRow> busyHours = byHour.values().stream()
+                    .sorted(Comparator.comparing((AdminHourMetricRow r) -> r.getHour() == null ? 0 : r.getHour()))
+                    .toList();
+
+            List<AdminCityMetricRow> citySales = byCity.values().stream()
+                    .sorted(Comparator.comparing((AdminCityMetricRow r) -> r.getOrderRevenue() == null ? 0.0 : r.getOrderRevenue()).reversed())
+                    .limit(20)
+                    .toList();
+
+            AdminAnalyticsDetailsResponse resp = new AdminAnalyticsDetailsResponse();
+            resp.setSummary(summary);
+            resp.setTopCafes(topCafes);
+            resp.setTopItems(topItems);
+            resp.setBusyHours(busyHours);
+            resp.setCitySales(citySales);
+            return ResponseEntity.ok(resp);
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }

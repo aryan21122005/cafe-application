@@ -93,6 +93,30 @@ export async function getCafeDetailAdmin(cafeId) {
   return res.data
 }
 
+export async function downloadCafeHistoryExcel(cafeId) {
+  const res = await api.get(`/api/admin/cafes/${cafeId}/export/history.xlsx`, {
+    responseType: 'blob'
+  })
+  return res.data
+}
+
+export async function downloadCafeMenuExcel(cafeId) {
+  const res = await api.get(`/api/admin/cafes/${cafeId}/export/menu.xlsx`, {
+    responseType: 'blob'
+  })
+  return res.data
+}
+
+export async function getAdminAnalyticsSummary() {
+  const res = await api.get('/api/admin/analytics/summary')
+  return res.data
+}
+
+export async function getAdminAnalyticsDetails() {
+  const res = await api.get('/api/admin/analytics/details')
+  return res.data
+}
+
 export async function approveCafeAdmin(cafeId) {
   const res = await api.put(`/api/admin/cafes/${cafeId}/approve`)
   return res.data
@@ -240,6 +264,96 @@ export async function deleteOwnerBooking(username, bookingId) {
 
 export async function listOwnerOrders(username) {
   const res = await api.get('/api/owner/orders', {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function deleteOwnerOrder(username, orderId) {
+  const res = await api.delete(`/api/owner/orders/${orderId}`, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function listStaffOrders(username, status) {
+  const res = await api.get('/api/staff/orders', {
+    params: status ? { status } : undefined,
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function updateStaffOrderStatus(username, orderId, status) {
+  const res = await api.post(
+    `/api/staff/orders/${orderId}/status`,
+    { status },
+    {
+      headers: {
+        'X-USERNAME': username
+      }
+    }
+  )
+  return res.data
+}
+
+export async function listStaffApprovedBookings(username) {
+  const res = await api.get('/api/staff/bookings', {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function serveStaffOrder(username, orderId, allocatedTable) {
+  const res = await api.post(
+    `/api/staff/orders/${orderId}/serve`,
+    { allocatedTable },
+    {
+      headers: {
+        'X-USERNAME': username
+      }
+    }
+  )
+  return res.data
+}
+
+export async function listCustomerOrders(username) {
+  const res = await api.get('/api/customer/orders', {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function deleteCustomerOrder(username, orderId) {
+  const res = await api.delete(`/api/customer/orders/${orderId}`, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function getMyProfile(username) {
+  const res = await api.get('/api/profile/me', {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function updateMyProfile(username, payload) {
+  const res = await api.put('/api/profile/me', payload, {
     headers: {
       'X-USERNAME': username
     }

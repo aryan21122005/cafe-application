@@ -13,6 +13,8 @@ public class CafeOrderRow {
     private Long cafeId;
     private String cafeName;
 
+    private String customerUsername;
+
     private String customerName;
     private String customerPhone;
     private String status;

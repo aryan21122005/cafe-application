@@ -17,6 +17,10 @@ import CustomerOrdersPage from './pages/dashboards/CustomerOrdersPage.jsx'
 import OwnerDashboard from './pages/dashboards/OwnerDashboard.jsx'
 import ChefDashboard from './pages/dashboards/ChefDashboard.jsx'
 import WaiterDashboard from './pages/dashboards/WaiterDashboard.jsx'
+import ChefLayout from './pages/dashboards/ChefLayout.jsx'
+import WaiterLayout from './pages/dashboards/WaiterLayout.jsx'
+import ChefProfilePage from './pages/dashboards/ChefProfilePage.jsx'
+import WaiterProfilePage from './pages/dashboards/WaiterProfilePage.jsx'
 import { CustomerCartProvider } from './lib/customerCart.jsx'
 
 export default function App() {
@@ -50,6 +54,14 @@ export default function App() {
         }
       />
       <Route
+        path="/dashboard/admin/profile"
+        element={
+          <ProtectedRoute allowRoles={["ADMIN"]}>
+            <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/dashboard/customer"
         element={
           <ProtectedRoute allowRoles={["CUSTOMER"]}>
@@ -76,21 +88,35 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/chef"
+        path="/dashboard/owner/profile"
         element={
-          <ProtectedRoute allowRoles={["CHEF"]}>
-            <ChefDashboard />
+          <ProtectedRoute allowRoles={["OWNER"]}>
+            <OwnerDashboard />
           </ProtectedRoute>
         }
       />
       <Route
+        path="/dashboard/chef"
+        element={
+          <ProtectedRoute allowRoles={["CHEF"]}>
+            <ChefLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<ChefDashboard />} />
+        <Route path="profile" element={<ChefProfilePage />} />
+      </Route>
+      <Route
         path="/dashboard/waiter"
         element={
           <ProtectedRoute allowRoles={["WAITER"]}>
-            <WaiterDashboard />
+            <WaiterLayout />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<WaiterDashboard />} />
+        <Route path="profile" element={<WaiterProfilePage />} />
+      </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

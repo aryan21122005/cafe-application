@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { clearSession, getSession } from '../../lib/auth.js'
+import ProfilePage from './ProfilePage.jsx'
 import {
   approveUser,
   approveCafeAdmin,
@@ -9,6 +10,9 @@ import {
   denyUser,
   deleteUser,
   getCafeDetailAdmin,
+  downloadCafeHistoryExcel,
+  downloadCafeMenuExcel,
+  getAdminAnalyticsDetails,
   getUserDetail,
   getUserDetailByUsername,
   listCafeMenu,
@@ -18,11 +22,11 @@ import {
 } from '../../lib/api.js'
 
 const SECTIONS = {
+  profile: 'My Profile',
   overview: 'Overview',
   owners: 'Cafe Owner Management',
   cafes: 'Cafe Management',
   users: 'User Management',
-  orders: 'Order Monitoring',
   revenue: 'Revenue Control',
   analytics: 'Analytics',
   notifications: 'Notifications',
@@ -54,6 +58,7 @@ function TrashIcon({ className }) {
 
 export default function AdminDashboard() {
   const session = getSession()
+  const loc = useLocation()
   const [section, setSection] = useState('overview')
 
   const [users, setUsers] = useState([])
@@ -91,6 +96,9 @@ export default function AdminDashboard() {
   const [cafeDetailLoading, setCafeDetailLoading] = useState(false)
   const [cafeDetailError, setCafeDetailError] = useState('')
 
+  const [analyticsSummary, setAnalyticsSummary] = useState(null)
+  const [analyticsDetails, setAnalyticsDetails] = useState(null)
+
   const [showAddOwner, setShowAddOwner] = useState(false)
   const [addOwnerBusy, setAddOwnerBusy] = useState(false)
   const [addOwnerErr, setAddOwnerErr] = useState('')
@@ -123,6 +131,61 @@ export default function AdminDashboard() {
       reasonForLeaving: ''
     }
   ])
+
+  function downloadBlob(blob, filename) {
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    window.URL.revokeObjectURL(url)
+  }
+
+  async function onDownloadCafeHistory(cafeId, cafeName) {
+    if (!cafeId) return
+    try {
+      const blob = await downloadCafeHistoryExcel(cafeId)
+      const safe = String(cafeName || `cafe-${cafeId}`).replace(/[^a-zA-Z0-9-_]+/g, '_')
+      downloadBlob(blob, `${safe}-history.xlsx`)
+    } catch (e) {
+      const msg = e?.response?.data
+      setCafesError(typeof msg === 'string' ? msg : 'Failed to download history')
+    }
+  }
+
+  async function onDownloadCafeMenu(cafeId, cafeName) {
+    if (!cafeId) return
+    try {
+      const blob = await downloadCafeMenuExcel(cafeId)
+      const safe = String(cafeName || `cafe-${cafeId}`).replace(/[^a-zA-Z0-9-_]+/g, '_')
+      downloadBlob(blob, `${safe}-menu.xlsx`)
+    } catch (e) {
+      const msg = e?.response?.data
+      setCafesError(typeof msg === 'string' ? msg : 'Failed to download menu')
+    }
+  }
+
+  useEffect(() => {
+    if (section !== 'analytics') return
+    let alive = true
+    ;(async () => {
+      try {
+        const d = await getAdminAnalyticsDetails()
+        if (!alive) return
+        setAnalyticsDetails(d || null)
+        setAnalyticsSummary(d?.summary || null)
+      } catch {
+        if (!alive) return
+        setAnalyticsDetails(null)
+        setAnalyticsSummary(null)
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [section])
 
   const [showAddCafe, setShowAddCafe] = useState(false)
   const [addCafeBusy, setAddCafeBusy] = useState(false)
@@ -335,16 +398,19 @@ export default function AdminDashboard() {
   }
 
   useEffect(() => {
+    if (String(loc?.pathname || '').endsWith('/dashboard/admin/profile')) {
+      setSection('profile')
+    }
+
     let ignore = false
     ;(async () => {
-      if (ignore) return
       await refresh()
       await refreshCafes()
     })()
     return () => {
       ignore = true
     }
-  }, [])
+  }, [loc?.pathname])
 
   useEffect(() => {
     if (section === 'users' && users.length === 0) {
@@ -859,11 +925,11 @@ export default function AdminDashboard() {
   }
 
   const menu = [
+    { key: 'profile', label: SECTIONS.profile },
     { key: 'overview', label: SECTIONS.overview },
     { key: 'owners', label: SECTIONS.owners },
     { key: 'cafes', label: SECTIONS.cafes },
     { key: 'users', label: SECTIONS.users },
-    { key: 'orders', label: SECTIONS.orders },
     { key: 'revenue', label: SECTIONS.revenue },
     { key: 'analytics', label: SECTIONS.analytics },
     { key: 'notifications', label: SECTIONS.notifications },
@@ -1213,7 +1279,15 @@ export default function AdminDashboard() {
                 ) : (
                   pagedCafes2.map((cafe) => (
                     <tr key={cafe.id} className="hover:bg-slate-50">
-                      <td className="px-5 py-3 font-semibold">{cafe.cafeName}</td>
+                      <td className="px-5 py-3 font-semibold">
+                        <button
+                          type="button"
+                          className="text-left text-emerald-700 hover:underline"
+                          onClick={() => onDownloadCafeHistory(cafe.id, cafe.cafeName)}
+                        >
+                          {cafe.cafeName}
+                        </button>
+                      </td>
                       <td className="px-5 py-3">{cafe.ownerUsername}</td>
                       <td className="px-5 py-3">
                         {cafe.city}, {cafe.state}
@@ -1479,57 +1553,6 @@ export default function AdminDashboard() {
     )
   }
 
-  function OrderMonitoringSection() {
-    return (
-      <>
-        <SectionTitle breadcrumb="Dashboard / Order Monitoring" title="Order Monitoring" subtitle="View and filter orders across cafes" />
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-white">
-          <div className="flex flex-col gap-3 border-b border-slate-200 p-5 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="text-sm font-semibold">Orders</div>
-              <div className="mt-1 text-xs text-slate-500">Filter by cafe and date</div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm">
-                View all
-              </button>
-              <button type="button" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm">
-                Filter
-              </button>
-              <button type="button" className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500">
-                Export
-              </button>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
-                <tr>
-                  <th className="px-5 py-3">Order</th>
-                  <th className="px-5 py-3">Cafe</th>
-                  <th className="px-5 py-3">Date</th>
-                  <th className="px-5 py-3">Amount</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {orderPlaceholderRows.length === 0 ? (
-                  <tr>
-                    <td className="px-5 py-6 text-slate-500" colSpan={6}>
-                      No orders available yet.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </>
-    )
-  }
-
   function RevenueControlSection() {
     return (
       <>
@@ -1550,28 +1573,143 @@ export default function AdminDashboard() {
   }
 
   function AnalyticsSection() {
+    const topCafes = Array.isArray(analyticsDetails?.topCafes) ? analyticsDetails.topCafes : []
+    const topItems = Array.isArray(analyticsDetails?.topItems) ? analyticsDetails.topItems : []
+    const busyHours = Array.isArray(analyticsDetails?.busyHours) ? analyticsDetails.busyHours : []
+    const citySales = Array.isArray(analyticsDetails?.citySales) ? analyticsDetails.citySales : []
+
+    const maxCafeRevenue = useMemo(() => {
+      return topCafes.reduce((m, r) => Math.max(m, Number(r?.orderRevenue || 0)), 0)
+    }, [topCafes])
+
+    const maxItemQty = useMemo(() => {
+      return topItems.reduce((m, r) => Math.max(m, Number(r?.totalQty || 0)), 0)
+    }, [topItems])
+
+    const maxHourCount = useMemo(() => {
+      return busyHours.reduce((m, r) => Math.max(m, Number(r?.orderCount || 0)), 0)
+    }, [busyHours])
+
+    const maxCityRevenue = useMemo(() => {
+      return citySales.reduce((m, r) => Math.max(m, Number(r?.orderRevenue || 0)), 0)
+    }, [citySales])
+
     return (
       <>
         <SectionTitle breadcrumb="Dashboard / Analytics" title="Analytics" subtitle="Top cafes, popular items, busy hours and sales insights" />
 
+        <div className="mt-6 grid gap-4 md:grid-cols-4">
+          <Card label="TOTAL CAFES" value={analyticsSummary?.totalCafes ?? 0} />
+          <Card label="TOTAL ORDERS" value={analyticsSummary?.totalOrders ?? 0} />
+          <Card label="TOTAL BOOKINGS" value={analyticsSummary?.totalBookings ?? 0} />
+          <Card label="ORDER REVENUE" value={`₹${Number(analyticsSummary?.totalOrderRevenue ?? 0).toFixed(2)}`} />
+        </div>
+
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <div className="text-sm font-semibold">Top performing cafes</div>
-            <div className="mt-2 h-56 rounded-xl border border-dashed border-slate-200 bg-slate-50" />
+            <div className="mt-4 grid gap-2">
+              {topCafes.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">No data yet.</div>
+              ) : (
+                topCafes.map((r) => {
+                  const v = Number(r?.orderRevenue || 0)
+                  const pct = maxCafeRevenue > 0 ? Math.round((v / maxCafeRevenue) * 100) : 0
+                  return (
+                    <div key={r.cafeId} className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-slate-900">{r.cafeName || `Cafe #${r.cafeId}`}</div>
+                          <div className="mt-1 text-xs text-slate-500">{r.city || 'Unknown'} • {r.orderCount ?? 0} orders</div>
+                        </div>
+                        <div className="shrink-0 text-sm font-extrabold">₹{v.toFixed(2)}</div>
+                      </div>
+                      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <div className="text-sm font-semibold">Most ordered items</div>
-            <div className="mt-2 h-56 rounded-xl border border-dashed border-slate-200 bg-slate-50" />
+            <div className="mt-4 grid gap-2">
+              {topItems.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">No data yet.</div>
+              ) : (
+                topItems.map((r) => {
+                  const qty = Number(r?.totalQty || 0)
+                  const pct = maxItemQty > 0 ? Math.round((qty / maxItemQty) * 100) : 0
+                  return (
+                    <div key={r.menuItemId} className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-slate-900">{r.itemName || `Item #${r.menuItemId}`}</div>
+                          <div className="mt-1 text-xs text-slate-500">Qty: {qty} • ₹{Number(r?.totalRevenue || 0).toFixed(2)}</div>
+                        </div>
+                        <div className="shrink-0 text-sm font-extrabold">{qty}</div>
+                      </div>
+                      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-full rounded-full bg-indigo-500" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
           </div>
         </div>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <div className="text-sm font-semibold">Busy hours</div>
-            <div className="mt-2 h-56 rounded-xl border border-dashed border-slate-200 bg-slate-50" />
+            <div className="mt-4 grid gap-2">
+              {busyHours.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">No data yet.</div>
+              ) : (
+                busyHours.map((r) => {
+                  const cnt = Number(r?.orderCount || 0)
+                  const pct = maxHourCount > 0 ? Math.round((cnt / maxHourCount) * 100) : 0
+                  const label = `${String(r?.hour ?? 0).padStart(2, '0')}:00`
+                  return (
+                    <div key={r.hour} className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm font-semibold text-slate-900">{label}</div>
+                        <div className="text-xs text-slate-600">{cnt} orders • ₹{Number(r?.orderRevenue || 0).toFixed(2)}</div>
+                      </div>
+                      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-full rounded-full bg-amber-500" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <div className="text-sm font-semibold">City-wise sales</div>
-            <div className="mt-2 h-56 rounded-xl border border-dashed border-slate-200 bg-slate-50" />
+            <div className="mt-4 grid gap-2">
+              {citySales.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">No data yet.</div>
+              ) : (
+                citySales.map((r) => {
+                  const rev = Number(r?.orderRevenue || 0)
+                  const pct = maxCityRevenue > 0 ? Math.round((rev / maxCityRevenue) * 100) : 0
+                  return (
+                    <div key={r.city} className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm font-semibold text-slate-900">{r.city || 'Unknown'}</div>
+                        <div className="text-xs text-slate-600">{r.orderCount ?? 0} orders • ₹{rev.toFixed(2)}</div>
+                      </div>
+                      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-full rounded-full bg-sky-500" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
           </div>
         </div>
       </>
@@ -1709,11 +1847,11 @@ export default function AdminDashboard() {
           </header> */}
 
           <main className="mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-y-auto px-4 py-6 md:px-6">
+            {section === 'profile' ? <ProfilePage titlePrefix="Admin / Profile" /> : null}
             {section === 'overview' ? <OverviewSection /> : null}
             {section === 'owners' ? <OwnerManagementSection /> : null}
             {section === 'cafes' ? <CafeManagementSection /> : null}
             {section === 'users' ? <UserManagementSection /> : null}
-            {section === 'orders' ? <OrderMonitoringSection /> : null}
             {section === 'revenue' ? <RevenueControlSection /> : null}
             {section === 'analytics' ? <AnalyticsSection /> : null}
             {section === 'notifications' ? <NotificationsSection /> : null}
@@ -1851,6 +1989,25 @@ export default function AdminDashboard() {
                   </div>
                   <button type="button" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" onClick={closeCafeDetail}>
                     Close
+                  </button>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                    disabled={cafeDetailLoading}
+                    onClick={() => onDownloadCafeHistory(selectedCafeId, selectedCafe?.cafeName)}
+                  >
+                    Download orders + bookings
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    disabled={cafeDetailLoading}
+                    onClick={() => onDownloadCafeMenu(selectedCafeId, selectedCafe?.cafeName)}
+                  >
+                    Download menu
                   </button>
                 </div>
 

@@ -12,6 +12,7 @@ export default function CustomerCartPage() {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [amenity, setAmenity] = useState('')
+  const [table, setTable] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
@@ -93,6 +94,16 @@ export default function CustomerCartPage() {
                   <option value="FAMILY">Family seating</option>
                 </select>
               </div>
+
+              <div className="grid gap-1">
+                <div className="text-xs font-semibold text-slate-600">Table (optional)</div>
+                <input
+                  className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none"
+                  value={table}
+                  onChange={(e) => setTable(e.target.value)}
+                  placeholder="e.g. T1"
+                />
+              </div>
             </div>
 
             <button
@@ -104,17 +115,53 @@ export default function CustomerCartPage() {
                 setMsg('')
                 setBusy(true)
                 try {
+                  const username = String(session?.username || '').trim()
+                  if (!username) {
+                    setErr('Session expired. Please login again.')
+                    return
+                  }
+
                   if (cafeId == null) {
                     setErr('Cafe not selected. Add items from a cafe first.')
                     return
                   }
+
+                  const safeName = String(name || '').trim()
+                  const safePhone = String(phone || '').trim()
+                  if (!safeName) {
+                    setErr('Name is required.')
+                    return
+                  }
+                  if (!safePhone) {
+                    setErr('Phone is required.')
+                    return
+                  }
+
                   const itemsPayload = Object.values(cart || {}).map((e) => ({ menuItemId: e?.item?.id, qty: e?.qty }))
-                  const payload = { customerName: name, customerPhone: phone, items: itemsPayload, amenityPreference: amenity || null }
-                  await createCustomerOrder(session?.username, cafeId, payload)
+                  const cleanedItems = itemsPayload
+                    .filter((x) => x?.menuItemId != null)
+                    .map((x) => ({ menuItemId: Number(x.menuItemId), qty: Number(x.qty) || 0 }))
+                    .filter((x) => Number.isFinite(x.menuItemId) && x.menuItemId > 0 && Number.isFinite(x.qty) && x.qty > 0)
+
+                  if (cleanedItems.length === 0) {
+                    setErr('Cart is empty.')
+                    return
+                  }
+
+                  const payload = {
+                    customerName: safeName,
+                    customerPhone: safePhone,
+                    items: cleanedItems,
+                    amenityPreference: amenity || null,
+                    allocatedTable: String(table || '').trim() || null
+                  }
+                  await createCustomerOrder(username, cafeId, payload)
                   clear()
                   setMsg('Order placed')
                 } catch (e) {
-                  setErr(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to place order')
+                  const d = e?.response?.data
+                  const msg = typeof d === 'string' ? d : (d?.message || d?.error || null)
+                  setErr(msg || 'Failed to place order')
                 } finally {
                   setBusy(false)
                 }

@@ -10,6 +10,8 @@ import com.cafe.dto.CafeProfileResponse;
 import com.cafe.dto.RegisterRequest;
 import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.CafeDocumentRow;
+import com.cafe.dto.AdminAnalyticsSummary;
+import com.cafe.dto.AdminAnalyticsDetailsResponse;
 import com.cafe.service.AdminService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -79,6 +81,26 @@ public class AdminController {
     @GetMapping("/cafes/{id}/menu")
     public ResponseEntity<List<MenuItemRow>> listCafeMenu(@PathVariable Long id) {
         return adminService.listCafeMenu(id);
+    }
+
+    @GetMapping("/cafes/{id}/export/history.xlsx")
+    public ResponseEntity<byte[]> exportCafeHistoryExcel(@PathVariable Long id) {
+        return adminService.exportCafeHistoryExcel(id);
+    }
+
+    @GetMapping("/cafes/{id}/export/menu.xlsx")
+    public ResponseEntity<byte[]> exportCafeMenuExcel(@PathVariable Long id) {
+        return adminService.exportCafeMenuExcel(id);
+    }
+
+    @GetMapping("/analytics/summary")
+    public ResponseEntity<AdminAnalyticsSummary> getAnalyticsSummary() {
+        return adminService.getAnalyticsSummary();
+    }
+
+    @GetMapping("/analytics/details")
+    public ResponseEntity<AdminAnalyticsDetailsResponse> getAnalyticsDetails() {
+        return adminService.getAnalyticsDetails();
     }
 
     @DeleteMapping("/cafes/{id}")

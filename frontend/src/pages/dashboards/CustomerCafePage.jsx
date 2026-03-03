@@ -46,6 +46,7 @@ export default function CustomerCafePage() {
   const [orderName, setOrderName] = useState('')
   const [orderPhone, setOrderPhone] = useState('')
   const [orderAmenity, setOrderAmenity] = useState('')
+  const [orderTable, setOrderTable] = useState('')
   const [orderBusy, setOrderBusy] = useState(false)
   const [orderMsg, setOrderMsg] = useState('')
   const [orderErr, setOrderErr] = useState('')
@@ -96,7 +97,7 @@ export default function CustomerCafePage() {
 
   return (
     <div className="min-h-screen bg-[#EDE4DA] text-slate-900">
-      <div className="mx-auto max-w-6xl px-6 py-10">
+      <div className="w-full px-6 py-10">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-xs text-slate-500">Customer / Cafe</div>
@@ -370,17 +371,31 @@ export default function CustomerCafePage() {
                         setOrderMsg('')
                         setOrderBusy(true)
                         try {
+                          const username = String(session?.username || '').trim()
+                          if (!username) {
+                            setOrderErr('Session expired. Please login again.')
+                            return
+                          }
+
                           if (cartCafeId != null && cartCafeId !== cafeId) {
                             setOrderErr('Your cart belongs to another cafe. Clear cart to continue.')
                             return
                           }
                           const items = Object.values(cart || {}).map((e) => ({ menuItemId: e?.item?.id, qty: e?.qty }))
-                          const payload = { customerName: orderName, customerPhone: orderPhone, items, amenityPreference: orderAmenity || null }
-                          await createCustomerOrder(session?.username, cafeId, payload)
+                          const payload = {
+                            customerName: orderName,
+                            customerPhone: orderPhone,
+                            items,
+                            amenityPreference: orderAmenity || null,
+                            allocatedTable: String(orderTable || '').trim() || null
+                          }
+                          await createCustomerOrder(username, cafeId, payload)
                           clear()
                           setOrderMsg('Order placed')
                         } catch (e) {
-                          setOrderErr(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to place order')
+                          const d = e?.response?.data
+                          const msg = typeof d === 'string' ? d : (d?.message || d?.error || null)
+                          setOrderErr(msg || 'Failed to place order')
                         } finally {
                           setOrderBusy(false)
                         }
@@ -408,6 +423,16 @@ export default function CustomerCafePage() {
                           <option value="QUIET">Quiet area</option>
                           <option value="FAMILY">Family seating</option>
                         </select>
+                      </div>
+
+                      <div className="grid gap-1">
+                        <div className="text-xs font-semibold text-slate-600">Table (optional)</div>
+                        <input
+                          className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none"
+                          value={orderTable}
+                          onChange={(e) => setOrderTable(e.target.value)}
+                          placeholder="e.g. T1"
+                        />
                       </div>
                     </div>
                   </div>

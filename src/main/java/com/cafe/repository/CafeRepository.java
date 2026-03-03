@@ -11,5 +11,7 @@ public interface CafeRepository extends JpaRepository<Cafe, Long> {
 
     Optional<Cafe> findByOwnerUsername(String ownerUsername);
 
+    Optional<Cafe> findByStaffUsername(String username);
+
     List<Cafe> findByApprovalStatus(ApprovalStatus approvalStatus);
 }

@@ -10,6 +10,8 @@ import com.cafe.dto.CafeProfileRequest;
 import com.cafe.dto.AdminOwnerRow;
 import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.CafeDocumentRow;
+import com.cafe.dto.AdminAnalyticsSummary;
+import com.cafe.dto.AdminAnalyticsDetailsResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -52,4 +54,12 @@ public interface AdminService {
     ResponseEntity<String> deleteUser(Long id);
 
     ResponseEntity<byte[]> downloadDocument(Long id);
+
+    ResponseEntity<byte[]> exportCafeHistoryExcel(Long cafeId);
+
+    ResponseEntity<byte[]> exportCafeMenuExcel(Long cafeId);
+
+    ResponseEntity<AdminAnalyticsSummary> getAnalyticsSummary();
+
+    ResponseEntity<AdminAnalyticsDetailsResponse> getAnalyticsDetails();
 }

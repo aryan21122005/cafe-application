@@ -9,6 +9,12 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsername(String username);
 
+    @Query("SELECT u FROM User u JOIN u.personalDetails pd WHERE pd.email = :email")
+    Optional<User> findByPersonalDetailsEmail(@Param("email") String email);
+
+    @Query("SELECT u FROM User u JOIN u.personalDetails pd WHERE pd.phone = :phone")
+    Optional<User> findByPersonalDetailsPhone(@Param("phone") String phone);
+
     @Query("SELECT CASE WHEN COUNT(u) > 0 THEN true ELSE false END FROM User u JOIN u.personalDetails pd WHERE pd.email = :email")
     boolean existsByPersonalDetailsEmail(@Param("email") String email);
 

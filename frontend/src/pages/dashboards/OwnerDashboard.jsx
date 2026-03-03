@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { clearSession, getSession } from '../../lib/auth.js'
+import ProfilePage from './ProfilePage.jsx'
 import {
+  api,
+  approveCafeAdmin,
   createOwnerStaff,
   createOwnerMenuItem,
   deleteOwnerCapacity,
@@ -8,6 +12,7 @@ import {
   deleteOwnerStaff,
   deleteOwnerImage,
   deleteOwnerMenuItem,
+  deleteOwnerOrder,
   approveOwnerBooking,
   deleteOwnerBooking,
   denyOwnerBooking,
@@ -368,8 +373,15 @@ function OnboardingSection({
 
 export default function OwnerDashboard() {
   const session = getSession()
+  const loc = useLocation()
 
   const [tab, setTab] = useState('profile')
+
+  useEffect(() => {
+    if (String(loc?.pathname || '').endsWith('/dashboard/owner/profile')) {
+      setTab('myProfile')
+    }
+  }, [loc?.pathname])
 
   const [cafe, setCafe] = useState(null)
   const [cafeLoading, setCafeLoading] = useState(false)
@@ -395,6 +407,10 @@ export default function OwnerDashboard() {
   const [menuMsg, setMenuMsg] = useState('')
   const [menuErr, setMenuErr] = useState('')
 
+  const [menuQ, setMenuQ] = useState('')
+  const [menuPageSize, setMenuPageSize] = useState(10)
+  const [menuPage, setMenuPage] = useState(1)
+
   const [newMenuName, setNewMenuName] = useState('')
   const [newMenuPrice, setNewMenuPrice] = useState('')
   const [newMenuCategory, setNewMenuCategory] = useState('')
@@ -406,6 +422,10 @@ export default function OwnerDashboard() {
   const [capLoading, setCapLoading] = useState(false)
   const [capMsg, setCapMsg] = useState('')
   const [capErr, setCapErr] = useState('')
+
+  const [capQ, setCapQ] = useState('')
+  const [capPageSize, setCapPageSize] = useState(10)
+  const [capPage, setCapPage] = useState(1)
 
   const [capType, setCapType] = useState('DINE_IN')
   const [capTables, setCapTables] = useState('')
@@ -422,6 +442,10 @@ export default function OwnerDashboard() {
   const [bookingsLoading, setBookingsLoading] = useState(false)
   const [bookingsErr, setBookingsErr] = useState('')
 
+  const [bookingsQ, setBookingsQ] = useState('')
+  const [bookingsPageSize, setBookingsPageSize] = useState(10)
+  const [bookingsPage, setBookingsPage] = useState(1)
+
   const [denyOpen, setDenyOpen] = useState(false)
   const [denyBookingId, setDenyBookingId] = useState(null)
   const [denyReason, setDenyReason] = useState('')
@@ -430,6 +454,10 @@ export default function OwnerDashboard() {
   const [orders, setOrders] = useState([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersErr, setOrdersErr] = useState('')
+
+  const [ordersQ, setOrdersQ] = useState('')
+  const [ordersPageSize, setOrdersPageSize] = useState(10)
+  const [ordersPage, setOrdersPage] = useState(1)
 
   const [uploadFile, setUploadFile] = useState(null)
   const [uploadCover, setUploadCover] = useState(false)
@@ -503,6 +531,122 @@ export default function OwnerDashboard() {
     const start = (safePage - 1) * size
     return filteredStaff.slice(start, start + size)
   }, [filteredStaff, staffPage, staffPageSize, staffTotalPages])
+
+  const filteredMenu = useMemo(() => {
+    const list = Array.isArray(menu) ? menu : []
+    const q = String(menuQ || '').trim().toLowerCase()
+    if (!q) return list
+
+    return list.filter((m) => {
+      const hay = [m?.id, m?.name, m?.category, m?.price, m?.available]
+        .filter((v) => v !== null && v !== undefined)
+        .map((v) => String(v).toLowerCase())
+        .join(' | ')
+      return hay.includes(q)
+    })
+  }, [menu, menuQ])
+
+  const menuTotalPages = useMemo(() => {
+    const size = Number(menuPageSize) || 10
+    return Math.max(1, Math.ceil(filteredMenu.length / size))
+  }, [filteredMenu.length, menuPageSize])
+
+  const pagedMenu = useMemo(() => {
+    const size = Number(menuPageSize) || 10
+    const safePage = Math.min(Math.max(1, menuPage), menuTotalPages)
+    const start = (safePage - 1) * size
+    return filteredMenu.slice(start, start + size)
+  }, [filteredMenu, menuPage, menuPageSize, menuTotalPages])
+
+  const filteredCaps = useMemo(() => {
+    const list = Array.isArray(capacities) ? capacities : []
+    const q = String(capQ || '').trim().toLowerCase()
+    if (!q) return list
+
+    return list.filter((c) => {
+      const hay = [c?.id, c?.functionType, c?.tablesAvailable, c?.seatsAvailable, c?.price, c?.enabled]
+        .filter((v) => v !== null && v !== undefined)
+        .map((v) => String(v).toLowerCase())
+        .join(' | ')
+      return hay.includes(q)
+    })
+  }, [capacities, capQ])
+
+  const capTotalPages = useMemo(() => {
+    const size = Number(capPageSize) || 10
+    return Math.max(1, Math.ceil(filteredCaps.length / size))
+  }, [filteredCaps.length, capPageSize])
+
+  const pagedCaps = useMemo(() => {
+    const size = Number(capPageSize) || 10
+    const safePage = Math.min(Math.max(1, capPage), capTotalPages)
+    const start = (safePage - 1) * size
+    return filteredCaps.slice(start, start + size)
+  }, [filteredCaps, capPage, capPageSize, capTotalPages])
+
+  const filteredBookings = useMemo(() => {
+    const list = Array.isArray(bookings) ? bookings : []
+    const q = String(bookingsQ || '').trim().toLowerCase()
+    if (!q) return list
+
+    return list.filter((b) => {
+      const hay = [
+        b?.id,
+        b?.customerName,
+        b?.customerPhone,
+        b?.bookingDate,
+        b?.bookingTime,
+        b?.guests,
+        b?.amenityPreference,
+        b?.allocatedTable,
+        b?.status,
+        b?.note,
+        b?.denialReason
+      ]
+        .filter((v) => v !== null && v !== undefined)
+        .map((v) => String(v).toLowerCase())
+        .join(' | ')
+      return hay.includes(q)
+    })
+  }, [bookings, bookingsQ])
+
+  const bookingsTotalPages = useMemo(() => {
+    const size = Number(bookingsPageSize) || 10
+    return Math.max(1, Math.ceil(filteredBookings.length / size))
+  }, [filteredBookings.length, bookingsPageSize])
+
+  const pagedBookings = useMemo(() => {
+    const size = Number(bookingsPageSize) || 10
+    const safePage = Math.min(Math.max(1, bookingsPage), bookingsTotalPages)
+    const start = (safePage - 1) * size
+    return filteredBookings.slice(start, start + size)
+  }, [filteredBookings, bookingsPage, bookingsPageSize, bookingsTotalPages])
+
+  const filteredOrders = useMemo(() => {
+    const list = Array.isArray(orders) ? orders : []
+    const q = String(ordersQ || '').trim().toLowerCase()
+    if (!q) return list
+
+    return list.filter((o) => {
+      const hay = [o?.id, o?.customerName, o?.customerPhone, o?.status, o?.amenityPreference, o?.allocatedTable, o?.totalAmount, o?.createdAt]
+        .filter((v) => v !== null && v !== undefined)
+        .map((v) => String(v).toLowerCase())
+        .join(' | ')
+      return hay.includes(q)
+    })
+  }, [orders, ordersQ])
+
+  const ordersTotalPages = useMemo(() => {
+    const size = Number(ordersPageSize) || 10
+    return Math.max(1, Math.ceil(filteredOrders.length / size))
+  }, [filteredOrders.length, ordersPageSize])
+
+  const pagedOrders = useMemo(() => {
+    const size = Number(ordersPageSize) || 10
+    const safePage = Math.min(Math.max(1, ordersPage), ordersTotalPages)
+    const start = (safePage - 1) * size
+    return filteredOrders.slice(start, start + size)
+  }, [filteredOrders, ordersPage, ordersPageSize, ordersTotalPages])
 
   async function onDeleteCafe() {
     if (!window.confirm('Delete your cafe? This will remove menu items, images, and capacities.')) return
@@ -703,6 +847,15 @@ export default function OwnerDashboard() {
 
   useEffect(() => {
     if (!ownerUsername) return
+    if (tab !== 'orders') return
+    const t = setInterval(() => {
+      refreshOrders()
+    }, 8000)
+    return () => clearInterval(t)
+  }, [ownerUsername, tab])
+
+  useEffect(() => {
+    if (!ownerUsername) return
     if (hasCafe) return
     if (didPrefillCafe) return
 
@@ -744,14 +897,44 @@ export default function OwnerDashboard() {
             <div className="text-sm font-semibold">Bookings</div>
             <div className="mt-1 text-xs text-slate-600">Table bookings made by customers.</div>
           </div>
-          <button
-            type="button"
-            className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm"
-            onClick={refreshBookings}
-            disabled={bookingsLoading}
-          >
-            Refresh
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <span>Show</span>
+              <select
+                value={bookingsPageSize}
+                onChange={(e) => {
+                  setBookingsPageSize(Number(e.target.value) || 10)
+                  setBookingsPage(1)
+                }}
+                className="rounded-lg border border-black/10 bg-white px-2 py-1"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+              <span>entries</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <span>Search:</span>
+              <input
+                value={bookingsQ}
+                onChange={(e) => {
+                  setBookingsQ(e.target.value)
+                  setBookingsPage(1)
+                }}
+                className="w-56 rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                placeholder="customer / phone / date"
+              />
+            </div>
+            <button
+              type="button"
+              className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm"
+              onClick={refreshBookings}
+              disabled={bookingsLoading}
+            >
+              Refresh
+            </button>
+          </div>
         </div>
 
         {bookingsErr ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{bookingsErr}</div> : null}
@@ -775,8 +958,8 @@ export default function OwnerDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {Array.isArray(bookings) && bookings.length > 0 ? (
-                  bookings.map((b) => (
+                {filteredBookings.length > 0 ? (
+                  pagedBookings.map((b) => (
                     <tr key={b.id} className="bg-white/60">
                       <td className="px-3 py-2 font-semibold text-slate-900">{b.customerName || '-'}</td>
                       <td className="px-3 py-2 text-slate-700">{b.customerPhone || '-'}</td>
@@ -851,6 +1034,36 @@ export default function OwnerDashboard() {
                 )}
               </tbody>
             </table>
+
+            {filteredBookings.length > 0 ? (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-700">
+                <div>
+                  Showing {(Math.min(Math.max(1, bookingsPage), bookingsTotalPages) - 1) * (Number(bookingsPageSize) || 10) + 1} to{' '}
+                  {Math.min(Math.min(Math.max(1, bookingsPage), bookingsTotalPages) * (Number(bookingsPageSize) || 10), filteredBookings.length)} of {filteredBookings.length} entries
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                    onClick={() => setBookingsPage((p) => Math.max(1, p - 1))}
+                    disabled={bookingsPage <= 1}
+                  >
+                    Prev
+                  </button>
+                  <div className="text-xs">
+                    Page {Math.min(Math.max(1, bookingsPage), bookingsTotalPages)} of {bookingsTotalPages}
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                    onClick={() => setBookingsPage((p) => Math.min(bookingsTotalPages, p + 1))}
+                    disabled={bookingsPage >= bookingsTotalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -922,14 +1135,44 @@ export default function OwnerDashboard() {
             <div className="text-sm font-semibold">Orders</div>
             <div className="mt-1 text-xs text-slate-600">Food orders placed by customers.</div>
           </div>
-          <button
-            type="button"
-            className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm"
-            onClick={refreshOrders}
-            disabled={ordersLoading}
-          >
-            Refresh
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <span>Show</span>
+              <select
+                value={ordersPageSize}
+                onChange={(e) => {
+                  setOrdersPageSize(Number(e.target.value) || 10)
+                  setOrdersPage(1)
+                }}
+                className="rounded-lg border border-black/10 bg-white px-2 py-1"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+              <span>entries</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <span>Search:</span>
+              <input
+                value={ordersQ}
+                onChange={(e) => {
+                  setOrdersQ(e.target.value)
+                  setOrdersPage(1)
+                }}
+                className="w-56 rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                placeholder="customer / phone / status"
+              />
+            </div>
+            <button
+              type="button"
+              className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm"
+              onClick={refreshOrders}
+              disabled={ordersLoading}
+            >
+              Refresh
+            </button>
+          </div>
         </div>
 
         {ordersErr ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{ordersErr}</div> : null}
@@ -937,8 +1180,8 @@ export default function OwnerDashboard() {
 
         {!ordersLoading ? (
           <div className="mt-4 grid gap-3">
-            {Array.isArray(orders) && orders.length > 0 ? (
-              orders.map((o) => (
+            {filteredOrders.length > 0 ? (
+              pagedOrders.map((o) => (
                 <div key={o.id} className="rounded-2xl border border-black/10 bg-white/70 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
@@ -977,11 +1220,62 @@ export default function OwnerDashboard() {
                   ) : (
                     <div className="mt-2 text-sm text-slate-600">No items.</div>
                   )}
+
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-white/80 disabled:opacity-50"
+                      disabled={ordersLoading}
+                      onClick={async () => {
+                        if (!window.confirm('Delete this order?')) return
+                        setOrdersErr('')
+                        try {
+                          await deleteOwnerOrder(ownerUsername, o.id)
+                          await refreshOrders()
+                        } catch (e) {
+                          const msg = e?.response?.data
+                          setOrdersErr(typeof msg === 'string' ? msg : 'Failed to delete order')
+                        }
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               ))
             ) : (
               <div className="text-sm text-slate-600">No orders yet.</div>
             )}
+
+            {filteredOrders.length > 0 ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-700">
+                <div>
+                  Showing {(Math.min(Math.max(1, ordersPage), ordersTotalPages) - 1) * (Number(ordersPageSize) || 10) + 1} to{' '}
+                  {Math.min(Math.min(Math.max(1, ordersPage), ordersTotalPages) * (Number(ordersPageSize) || 10), filteredOrders.length)} of {filteredOrders.length} entries
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                    onClick={() => setOrdersPage((p) => Math.max(1, p - 1))}
+                    disabled={ordersPage <= 1}
+                  >
+                    Prev
+                  </button>
+                  <div className="text-xs">
+                    Page {Math.min(Math.max(1, ordersPage), ordersTotalPages)} of {ordersTotalPages}
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                    onClick={() => setOrdersPage((p) => Math.min(ordersTotalPages, p + 1))}
+                    disabled={ordersPage >= ordersTotalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -1451,6 +1745,7 @@ export default function OwnerDashboard() {
   const sidebarItems = useMemo(() => {
     const disabled = !hasCafe
     return [
+      { key: 'myProfile', label: 'My Profile', disabled: false },
       { key: 'profile', label: hasCafe ? 'Cafe Profile' : 'Register Cafe', disabled: false },
       { key: 'staff', label: 'Staff', disabled },
       { key: 'menu', label: 'Menu', disabled },
@@ -1468,7 +1763,12 @@ export default function OwnerDashboard() {
         type="button"
         disabled={!!item.disabled}
         onClick={() => {
-          if (!item.disabled) setTab(item.key)
+          if (item.disabled) return
+          if (item.key === 'myProfile') {
+            setTab('myProfile')
+            return
+          }
+          setTab(item.key)
         }}
         className={
           item.disabled
@@ -1574,8 +1874,42 @@ export default function OwnerDashboard() {
 
         <div className="rounded-2xl border border-black/10 bg-white/70">
           <div className="border-b border-black/10 p-5">
-            <div className="text-sm font-semibold">Items</div>
-            <div className="mt-1 text-xs text-slate-600">Current menu items.</div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold">Items</div>
+                <div className="mt-1 text-xs text-slate-600">Current menu items.</div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 text-sm text-slate-700">
+                  <span>Show</span>
+                  <select
+                    value={menuPageSize}
+                    onChange={(e) => {
+                      setMenuPageSize(Number(e.target.value) || 10)
+                      setMenuPage(1)
+                    }}
+                    className="rounded-lg border border-black/10 bg-white px-2 py-1"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                  <span>entries</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-slate-700">
+                  <span>Search:</span>
+                  <input
+                    value={menuQ}
+                    onChange={(e) => {
+                      setMenuQ(e.target.value)
+                      setMenuPage(1)
+                    }}
+                    className="w-56 rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                    placeholder="name / category"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1100px] text-left text-sm">
@@ -1590,14 +1924,14 @@ export default function OwnerDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5">
-                {menu.length === 0 ? (
+                {filteredMenu.length === 0 ? (
                   <tr>
                     <td className="px-5 py-6 text-slate-600" colSpan={6}>
                       No items yet.
                     </td>
                   </tr>
                 ) : (
-                  menu.map((m) => (
+                  pagedMenu.map((m) => (
                     <tr key={m.id} className="hover:bg-black/5">
                       <td className="px-5 py-3">
                         {m.imageUrl ? (
@@ -1664,6 +1998,36 @@ export default function OwnerDashboard() {
                 )}
               </tbody>
             </table>
+
+            {filteredMenu.length > 0 ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/10 p-4 text-sm text-slate-700">
+                <div>
+                  Showing {(Math.min(Math.max(1, menuPage), menuTotalPages) - 1) * (Number(menuPageSize) || 10) + 1} to{' '}
+                  {Math.min(Math.min(Math.max(1, menuPage), menuTotalPages) * (Number(menuPageSize) || 10), filteredMenu.length)} of {filteredMenu.length} entries
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                    onClick={() => setMenuPage((p) => Math.max(1, p - 1))}
+                    disabled={menuPage <= 1}
+                  >
+                    Prev
+                  </button>
+                  <div className="text-xs">
+                    Page {Math.min(Math.max(1, menuPage), menuTotalPages)} of {menuTotalPages}
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                    onClick={() => setMenuPage((p) => Math.min(menuTotalPages, p + 1))}
+                    disabled={menuPage >= menuTotalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1753,8 +2117,42 @@ export default function OwnerDashboard() {
 
         <div className="rounded-2xl border border-black/10 bg-white/70">
           <div className="border-b border-black/10 p-5">
-            <div className="text-sm font-semibold">Configured capacities</div>
-            <div className="mt-1 text-xs text-slate-600">Each function type can be configured once.</div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold">Configured capacities</div>
+                <div className="mt-1 text-xs text-slate-600">Each function type can be configured once.</div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 text-sm text-slate-700">
+                  <span>Show</span>
+                  <select
+                    value={capPageSize}
+                    onChange={(e) => {
+                      setCapPageSize(Number(e.target.value) || 10)
+                      setCapPage(1)
+                    }}
+                    className="rounded-lg border border-black/10 bg-white px-2 py-1"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                  <span>entries</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-slate-700">
+                  <span>Search:</span>
+                  <input
+                    value={capQ}
+                    onChange={(e) => {
+                      setCapQ(e.target.value)
+                      setCapPage(1)
+                    }}
+                    className="w-56 rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                    placeholder="function / tables"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-left text-sm">
@@ -1769,14 +2167,14 @@ export default function OwnerDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5">
-                {capacities.length === 0 ? (
+                {filteredCaps.length === 0 ? (
                   <tr>
                     <td className="px-5 py-6 text-slate-600" colSpan={6}>
                       No capacities yet.
                     </td>
                   </tr>
                 ) : (
-                  capacities.map((c) => (
+                  pagedCaps.map((c) => (
                     <tr key={c.id} className="hover:bg-black/5">
                       <td className="px-5 py-3 font-semibold text-slate-900">{c.functionType}</td>
                       <td className="px-5 py-3 text-slate-900">{c.tablesAvailable}</td>
@@ -1797,6 +2195,36 @@ export default function OwnerDashboard() {
                 )}
               </tbody>
             </table>
+
+            {filteredCaps.length > 0 ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/10 p-4 text-sm text-slate-700">
+                <div>
+                  Showing {(Math.min(Math.max(1, capPage), capTotalPages) - 1) * (Number(capPageSize) || 10) + 1} to{' '}
+                  {Math.min(Math.min(Math.max(1, capPage), capTotalPages) * (Number(capPageSize) || 10), filteredCaps.length)} of {filteredCaps.length} entries
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                    onClick={() => setCapPage((p) => Math.max(1, p - 1))}
+                    disabled={capPage <= 1}
+                  >
+                    Prev
+                  </button>
+                  <div className="text-xs">
+                    Page {Math.min(Math.max(1, capPage), capTotalPages)} of {capTotalPages}
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                    onClick={() => setCapPage((p) => Math.min(capTotalPages, p + 1))}
+                    disabled={capPage >= capTotalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -2420,6 +2848,7 @@ export default function OwnerDashboard() {
           <main className="min-h-0 min-w-0 flex-1 overflow-y-auto pr-1">
             {hasCafe ? (
               <>
+                {tab === 'myProfile' ? <ProfilePage titlePrefix="Owner / Profile" /> : null}
                 {tab === 'profile' ? (
                   <ProfileSection
                     cafe={cafe}

@@ -1,8 +1,7 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { clearSession, getSession } from '../../lib/auth.js'
-import { useCustomerCart } from '../../lib/customerCart.jsx'
 
-function NavItem({ to, label, right, active }) {
+function NavItem({ to, label, active }) {
   return (
     <Link
       to={to}
@@ -13,38 +12,31 @@ function NavItem({ to, label, right, active }) {
       }
     >
       <span>{label}</span>
-      {right != null ? <span className={active ? 'text-white/90' : 'text-slate-600'}>{right}</span> : null}
     </Link>
   )
 }
 
-export default function CustomerLayout() {
+export default function WaiterLayout() {
   const session = getSession()
   const loc = useLocation()
-  const { countItems } = useCustomerCart()
-
-  const items = countItems()
 
   const path = loc.pathname
   const isActive = (p) => path === p
 
   return (
     <div className="min-h-screen bg-[#EDE4DA] text-slate-900">
-      <div className="flex w-full gap-4 px-4 py-6 md:px-6">
-        <aside className="w-72 shrink-0">
+      <div className="w-full px-4 py-6 md:px-6">
+        <div className="flex h-[calc(100vh-48px)] min-h-0 gap-4 overflow-hidden">
+        <aside className="min-h-0 w-72 shrink-0 sticky top-6 h-[calc(100vh-48px)] overflow-y-auto">
           <div className="rounded-2xl border border-black/10 bg-white/70 p-5">
             <div>
-              <div className="text-xs text-slate-500">Customer</div>
-              <div className="mt-1 text-xl font-extrabold">{session?.username || 'Customer'}</div>
+              <div className="text-xs text-slate-500">Waiter</div>
+              <div className="mt-1 text-xl font-extrabold">{session?.username || 'Waiter'}</div>
             </div>
 
             <div className="mt-4 grid gap-2">
-              <NavItem to="/dashboard/customer" label="Browse Cafes" active={isActive('/dashboard/customer')} />
-              <NavItem to="/dashboard/customer/cart" label="Cart" right={items > 0 ? String(items) : null} active={isActive('/dashboard/customer/cart')} />
-              <NavItem to="/dashboard/customer/profile" label="Profile Management" active={isActive('/dashboard/customer/profile')} />
-              <NavItem to="/dashboard/customer/payments" label="Payment Methods" active={isActive('/dashboard/customer/payments')} />
-              <NavItem to="/dashboard/customer/coupons" label="Coupons" active={isActive('/dashboard/customer/coupons')} />
-              <NavItem to="/dashboard/customer/orders" label="Past Orders" active={isActive('/dashboard/customer/orders')} />
+              <NavItem to="/dashboard/waiter" label="Ready Orders" active={isActive('/dashboard/waiter')} />
+              <NavItem to="/dashboard/waiter/profile" label="Profile Management" active={isActive('/dashboard/waiter/profile')} />
             </div>
 
             <div className="mt-5 flex gap-2">
@@ -62,9 +54,10 @@ export default function CustomerLayout() {
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1">
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto pr-1">
           <Outlet />
         </main>
+        </div>
       </div>
     </div>
   )

@@ -76,4 +76,6 @@ public interface OwnerService {
     ResponseEntity<String> deleteBooking(String ownerUsername, Long bookingId);
 
     ResponseEntity<List<CafeOrderRow>> listOrders(String ownerUsername);
+
+    ResponseEntity<String> deleteOrder(String ownerUsername, Long orderId);
 }

@@ -23,4 +23,6 @@ public class CafeOrderRequest {
     private List<CafeOrderItemRequest> items;
 
     private String amenityPreference;
+
+    private String allocatedTable;
 }

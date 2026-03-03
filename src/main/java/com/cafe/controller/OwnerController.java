@@ -252,4 +252,12 @@ public class OwnerController {
     ) {
         return ownerService.listOrders(ownerUsername);
     }
+
+    @DeleteMapping("/orders/{id}")
+    public ResponseEntity<String> deleteOrder(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
+            @PathVariable Long id
+    ) {
+        return ownerService.deleteOrder(ownerUsername, id);
+    }
 }

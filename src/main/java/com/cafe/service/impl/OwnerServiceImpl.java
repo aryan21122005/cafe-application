@@ -322,6 +322,33 @@ public class OwnerServiceImpl implements OwnerService {
     }
 
     @Override
+    public ResponseEntity<String> deleteOrder(String ownerUsername, Long orderId) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (orderId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            CafeOrder o = cafeOrderRepository.findByIdAndCafeId(orderId, cafe.getId()).orElse(null);
+            if (o == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Order not found");
+            }
+
+            cafeOrderRepository.delete(o);
+            return ResponseEntity.ok("Deleted");
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
     public ResponseEntity<CafeProfileResponse> upsertCafeWithDocuments(String ownerUsername, CafeProfileRequest request, List<String> docKeys, List<MultipartFile> documents) {
         try {
             User owner = requireOwner(ownerUsername);

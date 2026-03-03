@@ -9,12 +9,15 @@ import com.cafe.entity.Cafe;
 import com.cafe.entity.CafeBooking;
 import com.cafe.entity.CafeOrder;
 import com.cafe.entity.CafeOrderItem;
+import com.cafe.entity.FunctionCapacity;
+import com.cafe.entity.FunctionType;
 import com.cafe.entity.MenuItem;
 import com.cafe.entity.Role;
 import com.cafe.entity.User;
 import com.cafe.repository.CafeBookingRepository;
 import com.cafe.repository.CafeOrderRepository;
 import com.cafe.repository.CafeRepository;
+import com.cafe.repository.FunctionCapacityRepository;
 import com.cafe.repository.MenuItemRepository;
 import com.cafe.repository.UserRepository;
 import jakarta.validation.Valid;
@@ -25,6 +28,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalDate;
+import java.time.LocalTime;
 
 @RestController
 @RequestMapping("/api/customer")
@@ -44,6 +49,9 @@ public class CustomerController {
 
     @Autowired
     private CafeOrderRepository cafeOrderRepository;
+
+    @Autowired
+    private FunctionCapacityRepository functionCapacityRepository;
 
     @GetMapping("/bookings")
     public ResponseEntity<List<CafeBookingRow>> listMyBookings(
@@ -79,6 +87,66 @@ public class CustomerController {
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+    }
+
+    @DeleteMapping("/orders/{id}")
+    public ResponseEntity<String> deleteMyOrder(
+            @RequestHeader(value = "X-USERNAME", required = false) String customerUsername,
+            @PathVariable Long id
+    ) {
+        try {
+            User customer = requireCustomer(customerUsername);
+            if (customer == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            if (id == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            CafeOrder o = cafeOrderRepository.findById(id).orElse(null);
+            if (o == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Order not found");
+            }
+
+            if (o.getCustomerUsername() != null && !o.getCustomerUsername().isBlank()) {
+                if (!o.getCustomerUsername().equals(customer.getUsername())) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+                }
+            } else {
+                String phone = null;
+                if (customer.getPersonalDetails() != null && customer.getPersonalDetails().getPhone() != null) {
+                    phone = customer.getPersonalDetails().getPhone().trim();
+                }
+                if (phone == null || phone.isBlank()) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+                }
+                if (o.getCustomerPhone() == null || !o.getCustomerPhone().trim().equals(phone)) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+                }
+            }
+
+            cafeOrderRepository.delete(o);
+            return ResponseEntity.ok("Deleted");
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    private String allocateDineInTable(Long cafeId, String preferredTable) {
+        FunctionCapacity cap = functionCapacityRepository.findByCafeIdAndFunctionType(cafeId, FunctionType.DINE_IN).orElse(null);
+        if (cap == null) return null;
+        if (!Boolean.TRUE.equals(cap.getEnabled())) return null;
+        Integer available = cap.getTablesAvailable();
+        if (available == null || available <= 0) return null;
+
+        cap.setTablesAvailable(available - 1);
+        functionCapacityRepository.save(cap);
+
+        String pref = (preferredTable == null ? null : preferredTable.trim());
+        if (pref != null && !pref.isBlank()) {
+            return pref;
+        }
+        return "DINE_IN_TABLE_" + System.currentTimeMillis();
     }
 
     @DeleteMapping("/bookings/{id}")
@@ -173,11 +241,19 @@ public class CustomerController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
 
+            String allocated = allocateDineInTable(cafe.getId(), request.getAllocatedTable());
+            if (allocated == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
             CafeOrder o = new CafeOrder();
             o.setCafe(cafe);
             o.setCustomerName(request.getCustomerName().trim());
+            o.setCustomerUsername(customer.getUsername());
             o.setCustomerPhone(request.getCustomerPhone().trim());
+            o.setAmenityPreference(request.getAmenityPreference());
             o.setStatus("PLACED");
+            o.setAllocatedTable(allocated);
 
             List<CafeOrderItem> items = new ArrayList<>();
             double total = 0.0;
@@ -207,7 +283,58 @@ public class CustomerController {
             o.getItems().addAll(items);
 
             cafeOrderRepository.save(o);
+
+            CafeBooking b = new CafeBooking();
+            b.setCafe(cafe);
+            b.setCustomerUsername(customer.getUsername());
+            b.setCustomerName(o.getCustomerName());
+            b.setCustomerPhone(o.getCustomerPhone());
+            b.setBookingDate(LocalDate.now().toString());
+            b.setBookingTime(LocalTime.now().withNano(0).toString());
+            b.setGuests(1);
+            b.setAmenityPreference(request.getAmenityPreference());
+            b.setAllocatedTable(allocated);
+            b.setStatus("APPROVED");
+            b.setDenialReason(null);
+            cafeBookingRepository.save(b);
+
             return ResponseEntity.status(HttpStatus.CREATED).body(toOrderRow(o));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @GetMapping("/orders")
+    public ResponseEntity<List<CafeOrderRow>> listMyOrders(
+            @RequestHeader(value = "X-USERNAME", required = false) String customerUsername
+    ) {
+        try {
+            User customer = requireCustomer(customerUsername);
+            if (customer == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+
+            List<CafeOrder> list = cafeOrderRepository.findByCustomerUsernameOrderByCreatedAtDesc(customer.getUsername());
+
+            if ((list == null || list.isEmpty())
+                    && customer.getPersonalDetails() != null
+                    && customer.getPersonalDetails().getPhone() != null
+                    && !customer.getPersonalDetails().getPhone().isBlank()) {
+                String phone = customer.getPersonalDetails().getPhone().trim();
+                List<CafeOrder> legacy = cafeOrderRepository.findByCustomerPhoneOrderByCreatedAtDesc(phone);
+                if (legacy != null && !legacy.isEmpty()) {
+                    for (CafeOrder o : legacy) {
+                        if (o != null && (o.getCustomerUsername() == null || o.getCustomerUsername().isBlank())) {
+                            o.setCustomerUsername(customer.getUsername());
+                            cafeOrderRepository.save(o);
+                        }
+                    }
+                    list = cafeOrderRepository.findByCustomerUsernameOrderByCreatedAtDesc(customer.getUsername());
+                }
+            }
+
+            List<CafeOrderRow> rows = (list == null ? List.<CafeOrderRow>of() : list.stream().map(this::toOrderRow).toList());
+            return ResponseEntity.ok(rows);
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
@@ -255,10 +382,13 @@ public class CustomerController {
         r.setId(o.getId());
         r.setCafeId(o.getCafe() == null ? null : o.getCafe().getId());
         r.setCafeName(o.getCafe() == null ? null : o.getCafe().getCafeName());
+        r.setCustomerUsername(o.getCustomerUsername());
         r.setCustomerName(o.getCustomerName());
         r.setCustomerPhone(o.getCustomerPhone());
         r.setStatus(o.getStatus());
         r.setTotalAmount(o.getTotalAmount());
+        r.setAmenityPreference(o.getAmenityPreference());
+        r.setAllocatedTable(o.getAllocatedTable());
         r.setCreatedAt(o.getCreatedAt());
         if (o.getItems() != null) {
             r.setItems(o.getItems().stream().map(it -> {
