@@ -1,75 +1,112 @@
 import { useEffect, useMemo, useState } from 'react'
-import { deleteCustomerBooking, deleteCustomerOrder, listCustomerBookings, listCustomerOrders } from '../../lib/api.js'
+import { createRazorpayOrderForCustomerOrder, deleteCustomerOrder, listCustomerOrders, verifyRazorpayPaymentForCustomerOrder } from '../../lib/api.js'
 import { getSession } from '../../lib/auth.js'
+
+function TrashIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className} aria-hidden="true">
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M6 6l1 16h10l1-16" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  )
+}
 
 export default function CustomerOrdersPage() {
   const session = getSession()
   const username = session?.username
 
-  const [bookings, setBookings] = useState([])
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
+  const [payingId, setPayingId] = useState(null)
 
-  const [q, setQ] = useState('')
-  const [status, setStatus] = useState('ALL')
-  const [pageSize, setPageSize] = useState(10)
-  const [page, setPage] = useState(1)
+  function loadRazorpayScript() {
+    return new Promise((resolve) => {
+      if (window.Razorpay) return resolve(true)
+      const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]')
+      if (existing) {
+        existing.addEventListener('load', () => resolve(true))
+        existing.addEventListener('error', () => resolve(false))
+        return
+      }
+      const script = document.createElement('script')
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.async = true
+      script.onload = () => resolve(true)
+      script.onerror = () => resolve(false)
+      document.body.appendChild(script)
+    })
+  }
 
-  const filteredBookings = useMemo(() => {
-    const list = Array.isArray(bookings) ? bookings : []
-    const query = String(q || '').trim().toLowerCase()
-    const statusQ = String(status || 'ALL').toUpperCase()
+  async function onPayNow(order) {
+    if (!username) return
+    if (!order?.id) return
+    const status = String(order?.paymentStatus || 'UNPAID').toUpperCase()
+    if (status === 'PAID') return
 
-    return list.filter((b) => {
-      if (statusQ !== 'ALL') {
-        const s = String(b?.status || 'PENDING').toUpperCase()
-        if (s !== statusQ) return false
+    setErr('')
+    setPayingId(order.id)
+    try {
+      const ok = await loadRazorpayScript()
+      if (!ok) throw new Error('Failed to load Razorpay')
+
+      const rp = await createRazorpayOrderForCustomerOrder(username, order.id)
+
+      const options = {
+        key: rp.razorpayKeyId,
+        amount: rp.amountPaise,
+        currency: rp.currency || 'INR',
+        name: rp.cafeName || 'Cafe',
+        description: `Order #${rp.orderNumber ?? rp.cafeOrderId}`,
+        order_id: rp.razorpayOrderId,
+        prefill: {
+          name: rp.customerName || undefined,
+          contact: rp.customerPhone || undefined
+        },
+        handler: async function (response) {
+          try {
+            await verifyRazorpayPaymentForCustomerOrder(username, order.id, {
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature
+            })
+            await refresh()
+          } catch (e) {
+            const msg = e?.response?.data
+            setErr(typeof msg === 'string' ? msg : 'Payment verification failed')
+          } finally {
+            setPayingId(null)
+          }
+        }
       }
 
-      if (!query) return true
-
-      const hay = [
-        b?.id,
-        b?.cafeName,
-        b?.bookingDate,
-        b?.bookingTime,
-        b?.guests,
-        b?.amenityPreference,
-        b?.allocatedTable,
-        b?.status,
-        b?.denialReason
-      ]
-        .filter((v) => v !== null && v !== undefined)
-        .map((v) => String(v).toLowerCase())
-        .join(' | ')
-      return hay.includes(query)
-    })
-  }, [bookings, q, status])
-
-  const totalPages = useMemo(() => {
-    const size = Number(pageSize) || 10
-    return Math.max(1, Math.ceil(filteredBookings.length / size))
-  }, [filteredBookings.length, pageSize])
-
-  const pagedBookings = useMemo(() => {
-    const size = Number(pageSize) || 10
-    const safePage = Math.min(Math.max(1, page), totalPages)
-    const start = (safePage - 1) * size
-    return filteredBookings.slice(start, start + size)
-  }, [filteredBookings, page, pageSize, totalPages])
+      const rzp = new window.Razorpay(options)
+      rzp.on('payment.failed', function (resp) {
+        const reason = resp?.error?.description || resp?.error?.reason || 'Payment failed'
+        setErr(reason)
+        setPayingId(null)
+      })
+      rzp.open()
+    } catch (e) {
+      const msg = e?.response?.data || e?.message
+      setErr(typeof msg === 'string' ? msg : 'Failed to start payment')
+      setPayingId(null)
+    }
+  }
 
   async function refresh() {
     if (!username) return
     setErr('')
     setLoading(true)
     try {
-      const [b, o] = await Promise.all([listCustomerBookings(username), listCustomerOrders(username)])
-      setBookings(Array.isArray(b) ? b : [])
+      const o = await listCustomerOrders(username)
       setOrders(Array.isArray(o) ? o : [])
     } catch (e) {
       const msg = e?.response?.data
-      setErr(typeof msg === 'string' ? msg : 'Failed to load bookings')
+      setErr(typeof msg === 'string' ? msg : 'Failed to load orders')
     } finally {
       setLoading(false)
     }
@@ -198,10 +235,11 @@ export default function CustomerOrdersPage() {
                 <div key={o.id} className="rounded-2xl border border-black/10 bg-white/70 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <div className="text-sm font-extrabold text-slate-900">Order #{o.id}</div>
+                      <div className="text-sm font-extrabold text-slate-900">Order #{o.orderNumber ?? o.id}</div>
                       <div className="mt-1 text-xs text-slate-600">
                         {o.cafeName || '-'} • {o.status || 'PLACED'}
                       </div>
+                      <div className="mt-1 text-xs text-slate-600">Payment: {o.paymentStatus || 'UNPAID'}</div>
                       <div className="mt-1 text-xs text-slate-600">Allocated: {o.allocatedTable || '-'} • Preference: {o.amenityPreference || '-'}</div>
                     </div>
                     <div className="text-sm font-extrabold">₹{o.totalAmount ?? 0}</div>
@@ -228,7 +266,17 @@ export default function CustomerOrdersPage() {
                     </div>
                   ) : null}
 
-                  <div className="mt-3 flex justify-end">
+                  <div className="mt-3 flex justify-end gap-2">
+                    {String(o?.paymentStatus || 'UNPAID').toUpperCase() !== 'PAID' ? (
+                      <button
+                        type="button"
+                        className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                        disabled={loading || payingId === o.id}
+                        onClick={() => onPayNow(o)}
+                      >
+                        {payingId === o.id ? 'Opening...' : 'Pay Now'}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-white/80 disabled:opacity-50"
@@ -245,8 +293,10 @@ export default function CustomerOrdersPage() {
                           setErr(msg || 'Failed to delete order')
                         }
                       }}
+                      aria-label="Delete order"
+                      title="Delete"
                     >
-                      Delete
+                      <TrashIcon className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -259,6 +309,11 @@ export default function CustomerOrdersPage() {
               <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-700">
                 <div>
                   Showing {(Math.min(Math.max(1, ordersPage), ordersTotalPages) - 1) * (Number(ordersPageSize) || 10) + 1} to{' '}
+                  {Math.min(
+                    Math.min(Math.max(1, ordersPage), ordersTotalPages) * (Number(ordersPageSize) || 10),
+                    filteredOrders.length
+                  )}{' '}
+                  of {filteredOrders.length} entries
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -286,163 +341,6 @@ export default function CustomerOrdersPage() {
           </div>
         ) : null}
       </div>
-
-      <div className="mt-6 rounded-2xl border border-black/10 bg-white/70 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold">Your table bookings</div>
-            <div className="mt-1 text-xs text-slate-600">Status updates and denial reasons will appear here.</div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 text-sm text-slate-700">
-              <span>Show</span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value) || 10)
-                  setPage(1)
-                }}
-                className="rounded-lg border border-black/10 bg-white px-2 py-1"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
-              <span>entries</span>
-            </div>
-
-            <div className="flex items-center gap-2 text-sm text-slate-700">
-              <span>Status:</span>
-              <select
-                value={status}
-                onChange={(e) => {
-                  setStatus(e.target.value)
-                  setPage(1)
-                }}
-                className="rounded-lg border border-black/10 bg-white px-2 py-1"
-              >
-                <option value="ALL">All</option>
-                <option value="PENDING">Pending</option>
-                <option value="APPROVED">Approved</option>
-                <option value="DENIED">Denied</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2 text-sm text-slate-700">
-              <span>Search:</span>
-              <input
-                value={q}
-                onChange={(e) => {
-                  setQ(e.target.value)
-                  setPage(1)
-                }}
-                className="w-56 rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
-                placeholder="cafe / date / status"
-              />
-            </div>
-
-            <button type="button" className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm" onClick={refresh} disabled={loading}>
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        {err ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div> : null}
-        {loading ? <div className="mt-4 text-sm text-slate-600">Loading...</div> : null}
-
-        {!loading ? (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-sm">
-              <thead className="text-xs font-semibold uppercase text-slate-500">
-                <tr>
-                  <th className="px-3 py-2">Cafe</th>
-                  <th className="px-3 py-2">Date</th>
-                  <th className="px-3 py-2">Time</th>
-                  <th className="px-3 py-2">Guests</th>
-                  <th className="px-3 py-2">Preference</th>
-                  <th className="px-3 py-2">Allocated</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Reason</th>
-                  <th className="px-3 py-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {filteredBookings.length > 0 ? (
-                  pagedBookings.map((b) => (
-                    <tr key={b.id} className="bg-white/60">
-                      <td className="px-3 py-2 font-semibold text-slate-900">{b.cafeName || '-'}</td>
-                      <td className="px-3 py-2 text-slate-700">{b.bookingDate || '-'}</td>
-                      <td className="px-3 py-2 text-slate-700">{b.bookingTime || '-'}</td>
-                      <td className="px-3 py-2 text-slate-700">{b.guests ?? '-'}</td>
-                      <td className="px-3 py-2 text-slate-700">{b.amenityPreference || '-'}</td>
-                      <td className="px-3 py-2 text-slate-700">{b.allocatedTable || '-'}</td>
-                      <td className="px-3 py-2 text-slate-700">{b.status || 'PENDING'}</td>
-                      <td className="px-3 py-2 text-slate-600">{b.denialReason || '-'}</td>
-                      <td className="px-3 py-2">
-                        <button
-                          type="button"
-                          className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-white/80"
-                          onClick={async () => {
-                            if (!window.confirm('Delete this booking request?')) return
-                            setErr('')
-                            try {
-                              await deleteCustomerBooking(username, b.id)
-                              await refresh()
-                            } catch (e) {
-                              const msg = e?.response?.data
-                              setErr(typeof msg === 'string' ? msg : 'Failed to delete booking')
-                            }
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td className="px-3 py-4 text-slate-600" colSpan={9}>
-                      No bookings yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-
-            {filteredBookings.length > 0 ? (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-700">
-                <div>
-                  Showing {(Math.min(Math.max(1, page), totalPages) - 1) * (Number(pageSize) || 10) + 1} to{' '}
-                  {Math.min(Math.min(Math.max(1, page), totalPages) * (Number(pageSize) || 10), filteredBookings.length)} of {filteredBookings.length} entries
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page <= 1}
-                  >
-                    Prev
-                  </button>
-                  <div className="text-xs">
-                    Page {Math.min(Math.max(1, page), totalPages)} of {totalPages}
-                  </div>
-                  <button
-                    type="button"
-                    className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page >= totalPages}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="mt-6 text-sm text-slate-600">Orders: Coming soon.</div>
     </div>
   )
 }

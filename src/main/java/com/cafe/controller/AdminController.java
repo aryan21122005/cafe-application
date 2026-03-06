@@ -7,6 +7,7 @@ import com.cafe.dto.AdminUserDetail;
 import com.cafe.dto.AdminUserRow;
 import com.cafe.dto.CafeProfileRequest;
 import com.cafe.dto.CafeProfileResponse;
+import com.cafe.dto.CafeImageRow;
 import com.cafe.dto.RegisterRequest;
 import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.CafeDocumentRow;
@@ -50,6 +51,14 @@ public class AdminController {
     @GetMapping("/cafes/{id}")
     public ResponseEntity<CafeProfileResponse> getCafeDetail(@PathVariable Long id) {
         return adminService.getCafeDetail(id);
+    }
+
+    @PutMapping("/cafes/{id}")
+    public ResponseEntity<CafeProfileResponse> updateCafeProfile(
+            @PathVariable Long id,
+            @Valid @RequestBody CafeProfileRequest request
+    ) {
+        return adminService.updateCafeProfile(id, request);
     }
 
     @PutMapping("/cafes/{id}/approve")
@@ -106,6 +115,28 @@ public class AdminController {
     @DeleteMapping("/cafes/{id}")
     public ResponseEntity<String> deleteCafe(@PathVariable Long id) {
         return adminService.deleteCafe(id);
+    }
+
+    @GetMapping("/cafes/{id}/images")
+    public ResponseEntity<List<CafeImageRow>> listCafeImages(@PathVariable Long id) {
+        return adminService.listCafeImages(id);
+    }
+
+    @PostMapping(value = "/cafes/{id}/images", consumes = {"multipart/form-data"})
+    public ResponseEntity<CafeImageRow> uploadCafeImage(
+            @PathVariable Long id,
+            @RequestPart("file") MultipartFile file,
+            @org.springframework.web.bind.annotation.RequestParam(value = "cover", required = false) Boolean cover
+    ) {
+        return adminService.uploadCafeImage(id, file, cover);
+    }
+
+    @DeleteMapping("/cafes/{id}/images/{imageId}")
+    public ResponseEntity<String> deleteCafeImage(
+            @PathVariable Long id,
+            @PathVariable Long imageId
+    ) {
+        return adminService.deleteCafeImage(id, imageId);
     }
 
     @GetMapping("/cafes/{id}/documents")

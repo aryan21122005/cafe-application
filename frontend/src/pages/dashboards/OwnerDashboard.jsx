@@ -25,11 +25,23 @@ import {
   listOwnerOrders,
   listOwnerStaff,
   uploadOwnerMenuItemImage,
-  updateOwnerMenuItem,
+  updateOwnerMenuAvailability,
   uploadOwnerImage,
   upsertOwnerCapacity,
   upsertOwnerCafe
 } from '../../lib/api.js'
+
+function TrashIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className} aria-hidden="true">
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M6 6l1 16h10l1-16" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  )
+}
 
 function Field({ label, children }) {
   return (
@@ -953,6 +965,9 @@ export default function OwnerDashboard() {
                   <th className="px-3 py-2">Preference</th>
                   <th className="px-3 py-2">Allocated</th>
                   <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Payment</th>
+                  <th className="px-3 py-2">Payment ID</th>
+                  <th className="px-3 py-2">Paid At</th>
                   <th className="px-3 py-2">Note</th>
                   <th className="px-3 py-2">Actions</th>
                 </tr>
@@ -969,6 +984,9 @@ export default function OwnerDashboard() {
                       <td className="px-3 py-2 text-slate-700">{b.amenityPreference || '-'}</td>
                       <td className="px-3 py-2 text-slate-700">{b.allocatedTable || '-'}</td>
                       <td className="px-3 py-2 text-slate-700">{b.status || 'PENDING'}</td>
+                      <td className="px-3 py-2 text-slate-700">{b.paymentStatus || 'UNPAID'}</td>
+                      <td className="px-3 py-2 text-slate-700">{b.razorpayPaymentId || '-'}</td>
+                      <td className="px-3 py-2 text-slate-600">{b.paidAt ? new Date(Number(b.paidAt)).toLocaleString() : '-'}</td>
                       <td className="px-3 py-2 text-slate-600">{b.note || '-'}</td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
@@ -1015,8 +1033,10 @@ export default function OwnerDashboard() {
                                 setBookingsErr(typeof msg === 'string' ? msg : 'Failed to delete booking')
                               }
                             }}
+                            aria-label="Delete booking"
+                            title="Delete"
                           >
-                            Delete
+                            <TrashIcon className="h-4 w-4" />
                           </button>
                         </div>
                         {String(b.status || '').toUpperCase() === 'DENIED' && b.denialReason ? (
@@ -1027,7 +1047,7 @@ export default function OwnerDashboard() {
                   ))
                 ) : (
                   <tr>
-                    <td className="px-3 py-4 text-slate-600" colSpan={10}>
+                    <td className="px-3 py-4 text-slate-600" colSpan={13}>
                       No bookings yet.
                     </td>
                   </tr>
@@ -1185,7 +1205,7 @@ export default function OwnerDashboard() {
                 <div key={o.id} className="rounded-2xl border border-black/10 bg-white/70 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <div className="text-sm font-extrabold text-slate-900">Order #{o.id}</div>
+                      <div className="text-sm font-extrabold text-slate-900">Order #{o.orderNumber ?? o.id}</div>
                       <div className="mt-1 text-xs text-slate-600">
                         {o.customerName || '-'} • {o.customerPhone || '-'} • {o.status || 'PLACED'}
                       </div>
@@ -1237,8 +1257,10 @@ export default function OwnerDashboard() {
                           setOrdersErr(typeof msg === 'string' ? msg : 'Failed to delete order')
                         }
                       }}
+                      aria-label="Delete order"
+                      title="Delete"
                     >
-                      Delete
+                      <TrashIcon className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -1366,9 +1388,7 @@ export default function OwnerDashboard() {
     setMenuMsg('')
     setMenuLoading(true)
     try {
-      await updateOwnerMenuItem(ownerUsername, item.id, {
-        available: !item.available
-      })
+      await updateOwnerMenuAvailability(ownerUsername, item.id, !item.available)
       setMenuMsg('Updated')
       await refreshMenu()
     } catch (e) {
@@ -1988,8 +2008,10 @@ export default function OwnerDashboard() {
                             className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/15"
                             onClick={() => onDeleteMenuItem(m.id)}
                             disabled={menuLoading}
+                            aria-label="Delete menu item"
+                            title="Delete"
                           >
-                            Delete
+                            <TrashIcon className="h-4 w-4" />
                           </button>
                         </div>
                       </td>
@@ -2186,8 +2208,10 @@ export default function OwnerDashboard() {
                           type="button"
                           className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/15"
                           onClick={() => onDeleteCapacity(c.id)}
+                          aria-label="Delete capacity"
+                          title="Delete"
                         >
-                          Delete
+                          <TrashIcon className="h-4 w-4" />
                         </button>
                       </td>
                     </tr>
@@ -2309,8 +2333,10 @@ export default function OwnerDashboard() {
                       type="button"
                       className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"
                       onClick={() => onDeleteImage(img.id)}
+                      aria-label="Delete image"
+                      title="Delete"
                     >
-                      Delete
+                      <TrashIcon className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -2771,8 +2797,10 @@ export default function OwnerDashboard() {
                           type="button"
                           className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"
                           onClick={() => onDeleteStaff(u.id)}
+                          aria-label="Delete staff"
+                          title="Delete"
                         >
-                          Delete
+                          <TrashIcon className="h-4 w-4" />
                         </button>
                       </td>
                     </tr>

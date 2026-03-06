@@ -44,6 +44,7 @@ export default function CustomerLayout() {
               <NavItem to="/dashboard/customer/profile" label="Profile Management" active={isActive('/dashboard/customer/profile')} />
               <NavItem to="/dashboard/customer/payments" label="Payment Methods" active={isActive('/dashboard/customer/payments')} />
               <NavItem to="/dashboard/customer/coupons" label="Coupons" active={isActive('/dashboard/customer/coupons')} />
+              <NavItem to="/dashboard/customer/bookings" label="Table Bookings" active={isActive('/dashboard/customer/bookings')} />
               <NavItem to="/dashboard/customer/orders" label="Past Orders" active={isActive('/dashboard/customer/orders')} />
             </div>
 

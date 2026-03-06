@@ -7,6 +7,7 @@ import {
   approveCafeAdmin,
   createCafeForOwner,
   createOwner,
+  deleteCafeImageAdmin,
   denyUser,
   deleteUser,
   getCafeDetailAdmin,
@@ -15,10 +16,13 @@ import {
   getAdminAnalyticsDetails,
   getUserDetail,
   getUserDetailByUsername,
+  listCafeImagesAdmin,
   listCafeMenu,
   listCafes,
   listOwners,
-  listUsers
+  listUsers,
+  updateCafeProfileAdmin,
+  uploadCafeImageAdmin
 } from '../../lib/api.js'
 
 const SECTIONS = {
@@ -95,6 +99,18 @@ export default function AdminDashboard() {
   const [cafeMenu, setCafeMenu] = useState([])
   const [cafeDetailLoading, setCafeDetailLoading] = useState(false)
   const [cafeDetailError, setCafeDetailError] = useState('')
+
+  const [cafeImages, setCafeImages] = useState([])
+  const [cafeImagesLoading, setCafeImagesLoading] = useState(false)
+  const [cafeImagesError, setCafeImagesError] = useState('')
+
+  const [cafeProfileSaving, setCafeProfileSaving] = useState(false)
+  const [cafeProfileMsg, setCafeProfileMsg] = useState('')
+
+  const [cafeEdit, setCafeEdit] = useState(null)
+
+  const [uploadCafeImgFile, setUploadCafeImgFile] = useState(null)
+  const [uploadCafeImgCover, setUploadCafeImgCover] = useState(false)
 
   const [analyticsSummary, setAnalyticsSummary] = useState(null)
   const [analyticsDetails, setAnalyticsDetails] = useState(null)
@@ -360,16 +376,108 @@ export default function AdminDashboard() {
     setSelectedCafeId(cafe?.id ?? null)
     setSelectedCafe(cafe || null)
     setCafeMenu([])
+    setCafeImages([])
+    setCafeImagesError('')
+    setCafeProfileMsg('')
     setCafeDetailError('')
     setCafeDetailLoading(true)
     try {
-      const [detail, menu] = await Promise.all([getCafeDetailAdmin(cafe.id), listCafeMenu(cafe.id)])
+      const [detail, menu, imgs] = await Promise.all([getCafeDetailAdmin(cafe.id), listCafeMenu(cafe.id), listCafeImagesAdmin(cafe.id)])
       setSelectedCafe(detail || cafe || null)
+      setCafeEdit(detail || cafe || null)
       setCafeMenu(Array.isArray(menu) ? menu : [])
+      setCafeImages(Array.isArray(imgs) ? imgs : [])
     } catch (e) {
       setCafeDetailError(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to load cafe details')
     } finally {
       setCafeDetailLoading(false)
+    }
+  }
+
+  async function refreshCafeImages() {
+    if (selectedCafeId == null) return
+    setCafeImagesError('')
+    setCafeImagesLoading(true)
+    try {
+      const imgs = await listCafeImagesAdmin(selectedCafeId)
+      setCafeImages(Array.isArray(imgs) ? imgs : [])
+    } catch (e) {
+      setCafeImagesError(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to load cafe images')
+    } finally {
+      setCafeImagesLoading(false)
+    }
+  }
+
+  async function onUploadCafeImage() {
+    if (selectedCafeId == null) return
+    if (!uploadCafeImgFile) return
+    setCafeImagesError('')
+    setCafeImagesLoading(true)
+    try {
+      await uploadCafeImageAdmin(selectedCafeId, uploadCafeImgFile, uploadCafeImgCover)
+      setUploadCafeImgFile(null)
+      await refreshCafeImages()
+    } catch (e) {
+      setCafeImagesError(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to upload image')
+    } finally {
+      setCafeImagesLoading(false)
+    }
+  }
+
+  async function onDeleteCafeImage(imageId) {
+    if (selectedCafeId == null || imageId == null) return
+    if (!window.confirm('Delete this image?')) return
+    setCafeImagesError('')
+    setCafeImagesLoading(true)
+    try {
+      await deleteCafeImageAdmin(selectedCafeId, imageId)
+      await refreshCafeImages()
+    } catch (e) {
+      setCafeImagesError(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to delete image')
+    } finally {
+      setCafeImagesLoading(false)
+    }
+  }
+
+  async function onSaveCafeProfile() {
+    if (selectedCafeId == null) return
+    if (!cafeEdit) return
+    setCafeProfileMsg('')
+    setCafeDetailError('')
+    setCafeProfileSaving(true)
+    try {
+      const updated = await updateCafeProfileAdmin(selectedCafeId, {
+        cafeName: cafeEdit.cafeName,
+        ownerNames: cafeEdit.ownerNames,
+        pocDesignation: cafeEdit.pocDesignation,
+        description: cafeEdit.description,
+        phone: cafeEdit.phone,
+        email: cafeEdit.email,
+        whatsappNumber: cafeEdit.whatsappNumber,
+        addressLine: cafeEdit.addressLine,
+        city: cafeEdit.city,
+        state: cafeEdit.state,
+        pincode: cafeEdit.pincode,
+        openingTime: cafeEdit.openingTime,
+        closingTime: cafeEdit.closingTime,
+        fssaiNumber: cafeEdit.fssaiNumber,
+        panNumber: cafeEdit.panNumber,
+        gstin: cafeEdit.gstin,
+        shopLicenseNumber: cafeEdit.shopLicenseNumber,
+        bankAccountNumber: cafeEdit.bankAccountNumber,
+        bankIfsc: cafeEdit.bankIfsc,
+        bankAccountHolderName: cafeEdit.bankAccountHolderName,
+        active: cafeEdit.active
+      })
+      setSelectedCafe(updated || cafeEdit)
+      setCafeEdit(updated || cafeEdit)
+      await refreshCafes()
+      setCafeProfileMsg('Saved')
+    } catch (e) {
+      const data = e?.response?.data
+      setCafeDetailError(typeof data === 'string' ? data : 'Failed to save cafe profile')
+    } finally {
+      setCafeProfileSaving(false)
     }
   }
 
@@ -393,6 +501,10 @@ export default function AdminDashboard() {
     setSelectedCafeId(null)
     setSelectedCafe(null)
     setCafeMenu([])
+    setCafeImages([])
+    setCafeImagesError('')
+    setCafeProfileMsg('')
+    setCafeEdit(null)
     setCafeDetailError('')
     setCafeDetailLoading(false)
   }
@@ -1408,7 +1520,7 @@ export default function AdminDashboard() {
             <table className="w-full min-w-[980px] text-left text-sm">
               <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
                 <tr>
-                  <th className="px-5 py-3">ID</th>
+                  {/* <th className="px-5 py-3">ID</th> */}
                   <th className="px-5 py-3">Username</th>
                   <th className="px-5 py-3">Role</th>
                   <th className="px-5 py-3">Status</th>
@@ -1434,7 +1546,7 @@ export default function AdminDashboard() {
                 ) : (
                   pageRows.map((u) => (
                     <tr key={u.id} className="hover:bg-slate-50">
-                      <td className="px-5 py-3 text-slate-700">{u.id}</td>
+                      {/* <td className="px-5 py-3 text-slate-700">{u.id}</td> */}
                       <td className="px-5 py-3 font-semibold text-slate-900">
                         <button
                           type="button"
@@ -1466,20 +1578,15 @@ export default function AdminDashboard() {
                       <td className="px-5 py-3 text-slate-700">{u.phone || '-'}</td>
                       <td className="px-5 py-3 text-slate-700">
                         {Array.isArray(u.documents) && u.documents.length > 0 ? (
-                          <div className="flex flex-col gap-1">
-                            {u.documents.map((d) => (
-                              <button
-                                key={d.id}
-                                type="button"
-                                className="inline-flex items-center gap-2 text-left text-emerald-700 hover:underline"
-                                onClick={() => window.open(`/api/admin/documents/${d.id}`, '_blank', 'noreferrer')}
-                                aria-label={`View document ${d.documentName || d.id}`}
-                              >
-                                <InfoIcon className="h-4 w-4" />
-                                <span>{d.documentName || `Document ${d.id}`}</span>
-                              </button>
-                            ))}
-                          </div>
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-2 py-2 text-slate-700 hover:bg-slate-50"
+                            onClick={() => window.open(`/api/admin/documents/${u.documents[0].id}`, '_blank', 'noreferrer')}
+                            aria-label="Download document"
+                            title="Download document"
+                          >
+                            <InfoIcon className="h-4 w-4" />
+                          </button>
                         ) : (
                           '-'
                         )}
@@ -2014,7 +2121,100 @@ export default function AdminDashboard() {
                 {cafeDetailError ? (
                   <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{cafeDetailError}</div>
                 ) : null}
+                {cafeProfileMsg ? (
+                  <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{cafeProfileMsg}</div>
+                ) : null}
                 {cafeDetailLoading ? <div className="mt-4 text-sm text-slate-600">Loading menu...</div> : null}
+
+                {selectedCafe && cafeEdit && !cafeDetailLoading ? (
+                  <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="text-sm font-semibold">Cafe profile</div>
+                      <button
+                        type="button"
+                        className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+                        onClick={onSaveCafeProfile}
+                        disabled={cafeProfileSaving}
+                      >
+                        Save profile
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Cafe name" value={cafeEdit.cafeName || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), cafeName: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Owner names" value={cafeEdit.ownerNames || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), ownerNames: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="POC designation" value={cafeEdit.pocDesignation || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), pocDesignation: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Phone" value={cafeEdit.phone || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), phone: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Email" value={cafeEdit.email || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), email: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="WhatsApp number" value={cafeEdit.whatsappNumber || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), whatsappNumber: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm md:col-span-2" placeholder="Description" value={cafeEdit.description || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), description: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm md:col-span-2" placeholder="Address" value={cafeEdit.addressLine || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), addressLine: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="City" value={cafeEdit.city || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), city: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="State" value={cafeEdit.state || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), state: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Pincode" value={cafeEdit.pincode || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), pincode: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Opening time" value={cafeEdit.openingTime || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), openingTime: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Closing time" value={cafeEdit.closingTime || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), closingTime: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="FSSAI" value={cafeEdit.fssaiNumber || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), fssaiNumber: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="PAN" value={cafeEdit.panNumber || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), panNumber: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="GSTIN" value={cafeEdit.gstin || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), gstin: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Shop license" value={cafeEdit.shopLicenseNumber || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), shopLicenseNumber: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Bank account" value={cafeEdit.bankAccountNumber || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), bankAccountNumber: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" placeholder="Bank IFSC" value={cafeEdit.bankIfsc || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), bankIfsc: e.target.value }))} />
+                      <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm md:col-span-2" placeholder="Bank holder name" value={cafeEdit.bankAccountHolderName || ''} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), bankAccountHolderName: e.target.value }))} />
+                      <select className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" value={String(!!cafeEdit.active)} onChange={(e) => setCafeEdit((p) => ({ ...(p || {}), active: e.target.value === 'true' }))}>
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                      </select>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm font-semibold">Cafe images</div>
+                    <button type="button" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" onClick={refreshCafeImages} disabled={cafeImagesLoading}>
+                      Refresh
+                    </button>
+                  </div>
+
+                  {cafeImagesError ? <div className="mt-3 text-sm text-red-700">{cafeImagesError}</div> : null}
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    <input type="file" accept="image/*" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" onChange={(e) => setUploadCafeImgFile(e.target.files?.[0] || null)} />
+                    <select className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" value={String(uploadCafeImgCover)} onChange={(e) => setUploadCafeImgCover(e.target.value === 'true')}>
+                      <option value="false">Cover: No</option>
+                      <option value="true">Cover: Yes</option>
+                    </select>
+                    <button type="button" className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60" onClick={onUploadCafeImage} disabled={cafeImagesLoading || !uploadCafeImgFile}>
+                      Upload
+                    </button>
+                  </div>
+
+                  {Array.isArray(cafeImages) && cafeImages.length > 0 ? (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                      {cafeImages
+                        .slice()
+                        .sort((a, b) => (a?.cover === b?.cover ? 0 : a?.cover ? -1 : 1))
+                        .map((img) => (
+                          <div key={img.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                            <a href={img.url} target="_blank" rel="noreferrer">
+                              <img src={img.url} alt={img.filename || 'cafe image'} className="h-32 w-full object-cover" />
+                            </a>
+                            <div className="flex items-center justify-between gap-2 p-3">
+                              <div className="text-xs text-slate-600">
+                                {img.cover ? <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-700">Cover</span> : null}
+                              </div>
+                              <button type="button" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60" onClick={() => onDeleteCafeImage(img.id)} disabled={cafeImagesLoading}>
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="mt-3 text-sm text-slate-600">No images uploaded for this cafe.</div>
+                  )}
+                </div>
 
                 {!cafeDetailLoading ? (
                   <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">

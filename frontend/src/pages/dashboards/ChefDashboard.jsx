@@ -20,8 +20,8 @@ export default function ChefDashboard() {
     setMsg('')
     setLoading(true)
     try {
-      const res = await listStaffOrders(username)
-      setOrders(Array.isArray(res) ? res : [])
+      const o = await listStaffOrders(username)
+      setOrders(Array.isArray(o) ? o : [])
     } catch (e) {
       const m = e?.response?.data
       setErr(typeof m === 'string' ? m : 'Failed to load orders')
@@ -98,7 +98,7 @@ export default function ChefDashboard() {
                 <div key={o.id} className="rounded-2xl border border-black/10 bg-white/70 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <div className="text-sm font-extrabold text-slate-900">Order #{o.id}</div>
+                      <div className="text-sm font-extrabold text-slate-900">Order #{o.orderNumber ?? o.id}</div>
                       <div className="mt-1 text-xs text-slate-600">
                         {o.customerName || '-'} • {o.customerPhone || '-'} • {st}
                       </div>

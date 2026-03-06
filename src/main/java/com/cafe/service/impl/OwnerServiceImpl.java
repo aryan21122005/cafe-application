@@ -1,61 +1,5 @@
 package com.cafe.service.impl;
 
-import com.cafe.dto.CafeBookingRow;
-import com.cafe.dto.CafeDocumentRow;
-import com.cafe.dto.CafeImageRow;
-import com.cafe.dto.CafeOrderRow;
-import com.cafe.dto.CafeProfileRequest;
-import com.cafe.dto.CafeProfileResponse;
-import com.cafe.dto.AdminUserDetail;
-import com.cafe.dto.FunctionCapacityRequest;
-import com.cafe.dto.FunctionCapacityRow;
-import com.cafe.dto.MenuItemRequest;
-import com.cafe.dto.MenuItemRow;
-import com.cafe.dto.OwnerStaffCreateRequest;
-import com.cafe.dto.OwnerStaffRow;
-import com.cafe.dto.CafeBookingRow;
-import com.cafe.dto.CafeOrderRow;
-import com.cafe.dto.CafeOrderItemRow;
-import com.cafe.dto.BookingDecisionRequest;
-import com.cafe.entity.ApprovalStatus;
-import com.cafe.entity.Cafe;
-import com.cafe.entity.CafeDocument;
-import com.cafe.entity.CafeImage;
-import com.cafe.entity.CafeBooking;
-import com.cafe.entity.CafeOrder;
-import com.cafe.entity.CafeOrderItem;
-import com.cafe.entity.FunctionCapacity;
-import com.cafe.entity.FunctionType;
-import com.cafe.entity.MenuItem;
-import com.cafe.entity.PersonalDetails;
-import com.cafe.entity.Role;
-import com.cafe.entity.User;
-import com.cafe.entity.Address;
-import com.cafe.entity.Document;
-import com.cafe.entity.WorkExperience;
-import com.cafe.repository.CafeRepository;
-import com.cafe.repository.CafeDocumentRepository;
-import com.cafe.repository.CafeImageRepository;
-import com.cafe.repository.FunctionCapacityRepository;
-import com.cafe.repository.MenuItemRepository;
-import com.cafe.repository.UserRepository;
-import com.cafe.repository.CafeBookingRepository;
-import com.cafe.repository.CafeOrderRepository;
-import com.cafe.service.EmailService;
-import com.cafe.service.OwnerService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -63,6 +7,60 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.cafe.dto.AdminUserDetail;
+import com.cafe.dto.BookingDecisionRequest;
+import com.cafe.dto.CafeBookingRow;
+import com.cafe.dto.CafeDocumentRow;
+import com.cafe.dto.CafeImageRow;
+import com.cafe.dto.CafeOrderItemRow;
+import com.cafe.dto.CafeOrderRow;
+import com.cafe.dto.CafeProfileRequest;
+import com.cafe.dto.CafeProfileResponse;
+import com.cafe.dto.FunctionCapacityRequest;
+import com.cafe.dto.FunctionCapacityRow;
+import com.cafe.dto.MenuAvailabilityRequest;
+import com.cafe.dto.MenuItemRequest;
+import com.cafe.dto.MenuItemRow;
+import com.cafe.dto.OwnerStaffCreateRequest;
+import com.cafe.dto.OwnerStaffRow;
+import com.cafe.entity.Address;
+import com.cafe.entity.ApprovalStatus;
+import com.cafe.entity.Cafe;
+import com.cafe.entity.CafeBooking;
+import com.cafe.entity.CafeDocument;
+import com.cafe.entity.CafeImage;
+import com.cafe.entity.CafeOrder;
+import com.cafe.entity.CafeOrderItem;
+import com.cafe.entity.Document;
+import com.cafe.entity.FunctionCapacity;
+import com.cafe.entity.FunctionType;
+import com.cafe.entity.MenuItem;
+import com.cafe.entity.PersonalDetails;
+import com.cafe.entity.Role;
+import com.cafe.entity.User;
+import com.cafe.repository.CafeBookingRepository;
+import com.cafe.repository.CafeDocumentRepository;
+import com.cafe.repository.CafeImageRepository;
+import com.cafe.repository.CafeOrderRepository;
+import com.cafe.repository.CafeRepository;
+import com.cafe.repository.FunctionCapacityRepository;
+import com.cafe.repository.MenuItemRepository;
+import com.cafe.repository.UserRepository;
+import com.cafe.service.EmailService;
+import com.cafe.service.OwnerService;
 
 @Service
 public class OwnerServiceImpl implements OwnerService {
@@ -174,7 +172,7 @@ public class OwnerServiceImpl implements OwnerService {
         }
     }
 
-    private String allocateDineInTable(Long cafeId) {
+    private String allocateDineInTable(Long cafeId, String preferredTable) {
         FunctionCapacity cap = functionCapacityRepository.findByCafeIdAndFunctionType(cafeId, FunctionType.DINE_IN).orElse(null);
         if (cap == null) return null;
         if (!Boolean.TRUE.equals(cap.getEnabled())) return null;
@@ -183,6 +181,10 @@ public class OwnerServiceImpl implements OwnerService {
 
         cap.setTablesAvailable(available - 1);
         functionCapacityRepository.save(cap);
+        String pref = (preferredTable == null ? null : preferredTable.trim());
+        if (pref != null && !pref.isBlank()) {
+            return pref;
+        }
         return "DINE_IN_TABLE_" + System.currentTimeMillis();
     }
 
@@ -233,7 +235,12 @@ public class OwnerServiceImpl implements OwnerService {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
             }
 
-            String allocated = allocateDineInTable(cafe.getId());
+            String curr = String.valueOf(b.getStatus() == null ? "PENDING" : b.getStatus()).trim().toUpperCase();
+            if (curr.equals("APPROVED")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            String allocated = allocateDineInTable(cafe.getId(), b.getAllocatedTable());
             if (allocated == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
@@ -294,8 +301,14 @@ public class OwnerServiceImpl implements OwnerService {
             if (cafe == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
+
             List<CafeBooking> list = cafeBookingRepository.findByCafeIdOrderByCreatedAtDesc(cafe.getId());
-            List<CafeBookingRow> rows = list.stream().map(this::toBookingRow).toList();
+            if (list != null) {
+                list = list.stream()
+                        .filter(b -> b != null && "PAID".equalsIgnoreCase(String.valueOf(b.getPaymentStatus() == null ? "UNPAID" : b.getPaymentStatus())))
+                        .toList();
+            }
+            List<CafeBookingRow> rows = (list == null ? List.<CafeBookingRow>of() : list.stream().map(this::toBookingRow).toList());
             return ResponseEntity.ok(rows);
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -314,10 +327,33 @@ public class OwnerServiceImpl implements OwnerService {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
             List<CafeOrder> list = cafeOrderRepository.findByCafeIdOrderByCreatedAtDesc(cafe.getId());
+            if (list != null) {
+                list = list.stream()
+                        .filter(o -> o != null && "PAID".equalsIgnoreCase(String.valueOf(o.getPaymentStatus() == null ? "UNPAID" : o.getPaymentStatus())))
+                        .toList();
+            }
+            ensureOrderNumbers(list);
             List<CafeOrderRow> rows = list.stream().map(this::toOrderRow).toList();
             return ResponseEntity.ok(rows);
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    private void ensureOrderNumbers(List<CafeOrder> list) {
+        if (list == null || list.isEmpty()) return;
+        int max = 0;
+        for (CafeOrder o : list) {
+            if (o != null && o.getOrderNumber() != null && o.getOrderNumber() > max) max = o.getOrderNumber();
+        }
+        List<CafeOrder> missing = list.stream()
+                .filter(o -> o != null && o.getOrderNumber() == null)
+                .sorted(java.util.Comparator.comparingLong(o -> o.getCreatedAt() == null ? 0L : o.getCreatedAt()))
+                .toList();
+        int next = max + 1;
+        for (CafeOrder o : missing) {
+            o.setOrderNumber(next++);
+            cafeOrderRepository.save(o);
         }
     }
 
@@ -563,6 +599,10 @@ public class OwnerServiceImpl implements OwnerService {
         r.setGuests(b.getGuests());
         r.setNote(b.getNote());
         r.setStatus(b.getStatus());
+        r.setPaymentStatus(b.getPaymentStatus() == null ? "UNPAID" : b.getPaymentStatus());
+        r.setRazorpayOrderId(b.getRazorpayOrderId());
+        r.setRazorpayPaymentId(b.getRazorpayPaymentId());
+        r.setPaidAt(b.getPaidAt());
         r.setDenialReason(b.getDenialReason());
         r.setAmenityPreference(b.getAmenityPreference());
         r.setAllocatedTable(b.getAllocatedTable());
@@ -573,12 +613,17 @@ public class OwnerServiceImpl implements OwnerService {
     private CafeOrderRow toOrderRow(CafeOrder o) {
         CafeOrderRow r = new CafeOrderRow();
         r.setId(o.getId());
+        r.setOrderNumber(o.getOrderNumber());
         r.setCafeId(o.getCafe() == null ? null : o.getCafe().getId());
         r.setCafeName(o.getCafe() == null ? null : o.getCafe().getCafeName());
         r.setCustomerName(o.getCustomerName());
         r.setCustomerPhone(o.getCustomerPhone());
         r.setStatus(o.getStatus());
         r.setTotalAmount(o.getTotalAmount());
+        r.setPaymentStatus(o.getPaymentStatus() == null ? "UNPAID" : o.getPaymentStatus());
+        r.setRazorpayOrderId(o.getRazorpayOrderId());
+        r.setRazorpayPaymentId(o.getRazorpayPaymentId());
+        r.setPaidAt(o.getPaidAt());
         r.setAmenityPreference(o.getAmenityPreference());
         r.setAllocatedTable(o.getAllocatedTable());
         r.setCreatedAt(o.getCreatedAt());
@@ -1086,6 +1131,37 @@ public class OwnerServiceImpl implements OwnerService {
             if (request.getCategory() != null) {
                 m.setCategory(request.getCategory());
             }
+            menuItemRepository.save(m);
+            return ResponseEntity.ok(toMenuRow(m));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<MenuItemRow> updateMenuAvailability(String ownerUsername, Long id, MenuAvailabilityRequest request) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (id == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (request == null || request.getAvailable() == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            MenuItem m = menuItemRepository.findById(id).orElse(null);
+            if (m == null || m.getCafe() == null || !m.getCafe().getId().equals(cafe.getId())) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            m.setAvailable(request.getAvailable());
             menuItemRepository.save(m);
             return ResponseEntity.ok(toMenuRow(m));
         } catch (RuntimeException ex) {

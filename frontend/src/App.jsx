@@ -14,12 +14,14 @@ import CustomerProfilePage from './pages/dashboards/CustomerProfilePage.jsx'
 import CustomerPaymentsPage from './pages/dashboards/CustomerPaymentsPage.jsx'
 import CustomerCouponsPage from './pages/dashboards/CustomerCouponsPage.jsx'
 import CustomerOrdersPage from './pages/dashboards/CustomerOrdersPage.jsx'
+import CustomerBookingsPage from './pages/dashboards/CustomerBookingsPage.jsx'
 import OwnerDashboard from './pages/dashboards/OwnerDashboard.jsx'
 import ChefDashboard from './pages/dashboards/ChefDashboard.jsx'
 import WaiterDashboard from './pages/dashboards/WaiterDashboard.jsx'
 import ChefLayout from './pages/dashboards/ChefLayout.jsx'
 import WaiterLayout from './pages/dashboards/WaiterLayout.jsx'
 import ChefProfilePage from './pages/dashboards/ChefProfilePage.jsx'
+import ChefMenuPage from './pages/dashboards/ChefMenuPage.jsx'
 import WaiterProfilePage from './pages/dashboards/WaiterProfilePage.jsx'
 import { CustomerCartProvider } from './lib/customerCart.jsx'
 
@@ -77,6 +79,7 @@ export default function App() {
         <Route path="profile" element={<CustomerProfilePage />} />
         <Route path="payments" element={<CustomerPaymentsPage />} />
         <Route path="coupons" element={<CustomerCouponsPage />} />
+        <Route path="bookings" element={<CustomerBookingsPage />} />
         <Route path="orders" element={<CustomerOrdersPage />} />
       </Route>
       <Route
@@ -104,6 +107,7 @@ export default function App() {
         }
       >
         <Route index element={<ChefDashboard />} />
+        <Route path="menu" element={<ChefMenuPage />} />
         <Route path="profile" element={<ChefProfilePage />} />
       </Route>
       <Route

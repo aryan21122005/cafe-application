@@ -9,6 +9,7 @@ import com.cafe.dto.FunctionCapacityRequest;
 import com.cafe.dto.FunctionCapacityRow;
 import com.cafe.dto.MenuItemRequest;
 import com.cafe.dto.MenuItemRow;
+import com.cafe.dto.MenuAvailabilityRequest;
 import com.cafe.dto.OwnerStaffCreateRequest;
 import com.cafe.dto.OwnerStaffRow;
 import com.cafe.dto.CafeBookingRow;
@@ -50,6 +51,8 @@ public interface OwnerService {
     ResponseEntity<MenuItemRow> createMenuItem(String ownerUsername, MenuItemRequest request);
 
     ResponseEntity<MenuItemRow> updateMenuItem(String ownerUsername, Long id, MenuItemRequest request);
+
+    ResponseEntity<MenuItemRow> updateMenuAvailability(String ownerUsername, Long id, MenuAvailabilityRequest request);
 
     ResponseEntity<MenuItemRow> uploadMenuItemImage(String ownerUsername, Long id, MultipartFile file);
 

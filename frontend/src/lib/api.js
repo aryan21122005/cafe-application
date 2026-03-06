@@ -22,6 +22,28 @@ export async function registerUser(payload, documents) {
   return res.data
 }
 
+export async function listStaffMenu(username) {
+  const res = await api.get('/api/staff/menu', {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function updateStaffMenuAvailability(username, menuItemId, available) {
+  const res = await api.put(
+    `/api/staff/menu/${menuItemId}/availability`,
+    { available },
+    {
+      headers: {
+        'X-USERNAME': username
+      }
+    }
+  )
+  return res.data
+}
+
 export async function loginUser(payload) {
   const res = await api.post('/api/auth/login', payload)
   return res.data
@@ -90,6 +112,31 @@ export async function listCafeMenu(cafeId) {
 
 export async function getCafeDetailAdmin(cafeId) {
   const res = await api.get(`/api/admin/cafes/${cafeId}`)
+  return res.data
+}
+
+export async function updateCafeProfileAdmin(cafeId, payload) {
+  const res = await api.put(`/api/admin/cafes/${cafeId}`, payload)
+  return res.data
+}
+
+export async function listCafeImagesAdmin(cafeId) {
+  const res = await api.get(`/api/admin/cafes/${cafeId}/images`)
+  return res.data
+}
+
+export async function uploadCafeImageAdmin(cafeId, file, cover) {
+  const fd = new FormData()
+  fd.append('file', file)
+  if (typeof cover === 'boolean') {
+    fd.append('cover', String(!!cover))
+  }
+  const res = await api.post(`/api/admin/cafes/${cafeId}/images`, fd)
+  return res.data
+}
+
+export async function deleteCafeImageAdmin(cafeId, imageId) {
+  const res = await api.delete(`/api/admin/cafes/${cafeId}/images/${imageId}`)
   return res.data
 }
 
@@ -162,6 +209,24 @@ export async function listCustomerBookings(username) {
 
 export async function deleteCustomerBooking(username, bookingId) {
   const res = await api.delete(`/api/customer/bookings/${bookingId}`, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function createRazorpayOrderForCustomerBooking(username, bookingId) {
+  const res = await api.post(`/api/customer/bookings/${bookingId}/payment/razorpay/order`, null, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function verifyRazorpayPaymentForCustomerBooking(username, bookingId, payload) {
+  const res = await api.post(`/api/customer/bookings/${bookingId}/payment/razorpay/verify`, payload, {
     headers: {
       'X-USERNAME': username
     }
@@ -343,6 +408,42 @@ export async function deleteCustomerOrder(username, orderId) {
   return res.data
 }
 
+export async function createRazorpayOrderForCustomerOrder(username, orderId) {
+  const res = await api.post(`/api/customer/orders/${orderId}/payment/razorpay/order`, null, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function verifyRazorpayPaymentForCustomerOrder(username, orderId, payload) {
+  const res = await api.post(`/api/customer/orders/${orderId}/payment/razorpay/verify`, payload, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function createRazorpayOrderForCustomerCart(username, payload) {
+  const res = await api.post('/api/customer/payment/razorpay/order', payload, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function confirmRazorpayCustomerCartOrder(username, payload) {
+  const res = await api.post('/api/customer/payment/razorpay/confirm-cart-order', payload, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
 export async function getMyProfile(username) {
   const res = await api.get('/api/profile/me', {
     headers: {
@@ -462,6 +563,19 @@ export async function updateOwnerMenuItem(username, id, payload) {
       'X-USERNAME': username
     }
   })
+  return res.data
+}
+
+export async function updateOwnerMenuAvailability(username, id, available) {
+  const res = await api.put(
+    `/api/owner/menu/${id}/availability`,
+    { available },
+    {
+      headers: {
+        'X-USERNAME': username
+      }
+    }
+  )
   return res.data
 }
 

@@ -20,6 +20,10 @@ public class CafeBookingRow {
     private Integer guests;
     private String note;
     private String status;
+    private String paymentStatus;
+    private String razorpayOrderId;
+    private String razorpayPaymentId;
+    private Long paidAt;
     private String denialReason;
     private String amenityPreference;
     private String allocatedTable;

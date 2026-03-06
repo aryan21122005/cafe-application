@@ -106,7 +106,7 @@ export default function WaiterDashboard() {
               <div key={o.id} className="rounded-2xl border border-black/10 bg-white/70 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <div className="text-sm font-extrabold text-slate-900">Order #{o.id}</div>
+                    <div className="text-sm font-extrabold text-slate-900">Order #{o.orderNumber ?? o.id}</div>
                     <div className="mt-1 text-xs text-slate-600">
                       {o.customerName || '-'} • {o.customerPhone || '-'} • READY
                     </div>

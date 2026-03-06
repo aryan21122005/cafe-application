@@ -12,6 +12,7 @@ import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.CafeDocumentRow;
 import com.cafe.dto.AdminAnalyticsSummary;
 import com.cafe.dto.AdminAnalyticsDetailsResponse;
+import com.cafe.dto.CafeImageRow;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -31,11 +32,19 @@ public interface AdminService {
 
     ResponseEntity<CafeProfileResponse> getCafeDetail(Long cafeId);
 
+    ResponseEntity<CafeProfileResponse> updateCafeProfile(Long cafeId, CafeProfileRequest request);
+
     ResponseEntity<AdminCafeRow> approveCafe(Long cafeId);
 
     ResponseEntity<List<MenuItemRow>> listCafeMenu(Long cafeId);
 
     ResponseEntity<String> deleteCafe(Long cafeId);
+
+    ResponseEntity<List<CafeImageRow>> listCafeImages(Long cafeId);
+
+    ResponseEntity<CafeImageRow> uploadCafeImage(Long cafeId, MultipartFile file, Boolean cover);
+
+    ResponseEntity<String> deleteCafeImage(Long cafeId, Long imageId);
 
     ResponseEntity<List<CafeDocumentRow>> listCafeDocuments(Long cafeId);
 

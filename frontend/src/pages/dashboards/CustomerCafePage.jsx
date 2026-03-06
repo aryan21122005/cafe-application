@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
-import { createCustomerBooking, createCustomerOrder, getPublicCafeDetail, listPublicCafeImages, listPublicCafeMenu } from '../../lib/api.js'
+import { confirmRazorpayCustomerCartOrder, createCustomerBooking, createCustomerOrder, createRazorpayOrderForCustomerBooking, createRazorpayOrderForCustomerCart, getPublicCafeDetail, listPublicCafeImages, listPublicCafeMenu, verifyRazorpayPaymentForCustomerBooking } from '../../lib/api.js'
 import { useCustomerCart } from '../../lib/customerCart.jsx'
 import { getSession } from '../../lib/auth.js'
 
@@ -42,6 +42,7 @@ export default function CustomerCafePage() {
   const [bookBusy, setBookBusy] = useState(false)
   const [bookMsg, setBookMsg] = useState('')
   const [bookErr, setBookErr] = useState('')
+  const [bookPaying, setBookPaying] = useState(false)
 
   const [orderName, setOrderName] = useState('')
   const [orderPhone, setOrderPhone] = useState('')
@@ -50,6 +51,24 @@ export default function CustomerCafePage() {
   const [orderBusy, setOrderBusy] = useState(false)
   const [orderMsg, setOrderMsg] = useState('')
   const [orderErr, setOrderErr] = useState('')
+
+  function loadRazorpayScript() {
+    return new Promise((resolve) => {
+      if (window.Razorpay) return resolve(true)
+      const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]')
+      if (existing) {
+        existing.addEventListener('load', () => resolve(true))
+        existing.addEventListener('error', () => resolve(false))
+        return
+      }
+      const script = document.createElement('script')
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.async = true
+      script.onload = () => resolve(true)
+      script.onerror = () => resolve(false)
+      document.body.appendChild(script)
+    })
+  }
 
   const itemsById = useMemo(() => {
     const m = new Map()
@@ -225,16 +244,58 @@ export default function CustomerCafePage() {
                           note: bookNote,
                           amenityPreference: bookAmenity || null
                         }
-                        await createCustomerBooking(session?.username, cafeId, payload)
-                        setBookMsg('Booking request created')
+                        const created = await createCustomerBooking(session?.username, cafeId, payload)
+
+                        const ok = await loadRazorpayScript()
+                        if (!ok) throw new Error('Failed to load Razorpay')
+
+                        setBookPaying(true)
+                        const rp = await createRazorpayOrderForCustomerBooking(session?.username, created?.id)
+
+                        await new Promise((resolve, reject) => {
+                          const options = {
+                            key: rp.razorpayKeyId,
+                            amount: rp.amountPaise,
+                            currency: rp.currency || 'INR',
+                            name: rp.cafeName || 'Cafe',
+                            description: 'Booking fee (₹10)',
+                            order_id: rp.razorpayOrderId,
+                            prefill: {
+                              name: rp.customerName || undefined,
+                              contact: rp.customerPhone || undefined
+                            },
+                            handler: async function (response) {
+                              try {
+                                await verifyRazorpayPaymentForCustomerBooking(session?.username, created?.id, {
+                                  razorpayOrderId: response.razorpay_order_id,
+                                  razorpayPaymentId: response.razorpay_payment_id,
+                                  razorpaySignature: response.razorpay_signature
+                                })
+                                resolve(true)
+                              } catch (e) {
+                                reject(e)
+                              }
+                            }
+                          }
+
+                          const rzp = new window.Razorpay(options)
+                          rzp.on('payment.failed', function (resp) {
+                            reject(new Error(resp?.error?.description || resp?.error?.reason || 'Payment failed'))
+                          })
+                          rzp.open()
+                        })
+
+                        setBookMsg('Booking paid and created')
                       } catch (e) {
-                        setBookErr(typeof e?.response?.data === 'string' ? e.response.data : 'Failed to create booking')
+                        const msg = e?.response?.data || e?.message
+                        setBookErr(typeof msg === 'string' ? msg : 'Failed to create booking')
                       } finally {
+                        setBookPaying(false)
                         setBookBusy(false)
                       }
                     }}
                   >
-                    Book table
+                    {bookPaying ? 'Paying...' : 'Book table'}
                   </button>
                 </div>
               </div>
@@ -382,19 +443,61 @@ export default function CustomerCafePage() {
                             return
                           }
                           const items = Object.values(cart || {}).map((e) => ({ menuItemId: e?.item?.id, qty: e?.qty }))
-                          const payload = {
+                          const orderPayload = {
+                            cafeId,
                             customerName: orderName,
                             customerPhone: orderPhone,
                             items,
                             amenityPreference: orderAmenity || null,
                             allocatedTable: String(orderTable || '').trim() || null
                           }
-                          await createCustomerOrder(username, cafeId, payload)
+
+                          const ok = await loadRazorpayScript()
+                          if (!ok) throw new Error('Failed to load Razorpay')
+
+                          const rp = await createRazorpayOrderForCustomerCart(username, orderPayload)
+
+                          await new Promise((resolve, reject) => {
+                            const options = {
+                              key: rp.razorpayKeyId,
+                              amount: rp.amountPaise,
+                              currency: rp.currency || 'INR',
+                              name: rp.cafeName || 'Cafe',
+                              description: 'Order payment',
+                              order_id: rp.razorpayOrderId,
+                              prefill: {
+                                name: rp.customerName || undefined,
+                                contact: rp.customerPhone || undefined
+                              },
+                              handler: async function (response) {
+                                try {
+                                  await confirmRazorpayCustomerCartOrder(username, {
+                                    order: orderPayload,
+                                    payment: {
+                                      razorpayOrderId: response.razorpay_order_id,
+                                      razorpayPaymentId: response.razorpay_payment_id,
+                                      razorpaySignature: response.razorpay_signature
+                                    }
+                                  })
+                                  resolve(true)
+                                } catch (e) {
+                                  reject(e)
+                                }
+                              }
+                            }
+
+                            const rzp = new window.Razorpay(options)
+                            rzp.on('payment.failed', function (resp) {
+                              reject(new Error(resp?.error?.description || resp?.error?.reason || 'Payment failed'))
+                            })
+                            rzp.open()
+                          })
+
                           clear()
-                          setOrderMsg('Order placed')
+                          setOrderMsg('Order paid and placed')
                         } catch (e) {
                           const d = e?.response?.data
-                          const msg = typeof d === 'string' ? d : (d?.message || d?.error || null)
+                          const msg = (typeof d === 'string' ? d : (d?.message || d?.error || null)) || e?.message
                           setOrderErr(msg || 'Failed to place order')
                         } finally {
                           setOrderBusy(false)

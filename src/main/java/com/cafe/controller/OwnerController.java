@@ -10,6 +10,7 @@ import com.cafe.dto.MenuItemRequest;
 import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.OwnerStaffCreateRequest;
 import com.cafe.dto.OwnerStaffRow;
+import com.cafe.dto.MenuAvailabilityRequest;
 import com.cafe.dto.CafeDocumentRow;
 import com.cafe.dto.CafeBookingRow;
 import com.cafe.dto.CafeOrderRow;
@@ -148,6 +149,15 @@ public class OwnerController {
             @Valid @RequestBody MenuItemRequest request
     ) {
         return ownerService.updateMenuItem(ownerUsername, id, request);
+    }
+
+    @PutMapping("/menu/{id}/availability")
+    public ResponseEntity<MenuItemRow> updateMenuAvailability(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
+            @PathVariable Long id,
+            @Valid @RequestBody MenuAvailabilityRequest request
+    ) {
+        return ownerService.updateMenuAvailability(ownerUsername, id, request);
     }
 
     @PostMapping(value = "/menu/{id}/image", consumes = {"multipart/form-data"})

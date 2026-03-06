@@ -37,9 +37,22 @@ public class CafeOrder {
     @Column(nullable = false)
     private Double totalAmount = 0.0;
 
+    @Column(nullable = false)
+    private String paymentStatus = "UNPAID";
+
+    private String razorpayOrderId;
+
+    private String razorpayPaymentId;
+
+    private Long paidAt;
+
     private String amenityPreference;
 
     private String allocatedTable;
+
+    private Long bookingId;
+
+    private Integer orderNumber;
 
     @Column(nullable = false)
     private Long createdAt = System.currentTimeMillis();

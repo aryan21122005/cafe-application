@@ -7,6 +7,7 @@ import com.cafe.dto.AdminOwnerRow;
 import com.cafe.dto.AdminUserDetail;
 import com.cafe.dto.AdminUserRow;
 import com.cafe.dto.CafeDocumentRow;
+import com.cafe.dto.CafeImageRow;
 import com.cafe.dto.CafeProfileRequest;
 import com.cafe.dto.CafeProfileResponse;
 import com.cafe.dto.MenuItemRow;
@@ -38,6 +39,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,6 +48,7 @@ import java.io.IOException;
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -97,6 +100,9 @@ public class AdminServiceImpl implements AdminService {
 
     @Autowired(required = false)
     private EmailService emailService;
+
+    @Value("${cafe.images.dir:uploads/cafe-images}")
+    private String cafeImagesDir;
 
     @Override
     public ResponseEntity<List<AdminUserRow>> listUsers() {
@@ -155,6 +161,7 @@ public class AdminServiceImpl implements AdminService {
                 Row h = sOrders.createRow(r++);
                 int c = 0;
                 h.createCell(c++).setCellValue("OrderId");
+                h.createCell(c++).setCellValue("OrderNumber");
                 h.createCell(c++).setCellValue("CreatedAt");
                 h.createCell(c++).setCellValue("Status");
                 h.createCell(c++).setCellValue("CustomerUsername");
@@ -170,6 +177,7 @@ public class AdminServiceImpl implements AdminService {
                         Row rr = sOrders.createRow(r++);
                         int cc = 0;
                         rr.createCell(cc++).setCellValue(o.getId() == null ? 0 : o.getId());
+                        rr.createCell(cc++).setCellValue(o.getOrderNumber() == null ? 0 : o.getOrderNumber());
                         rr.createCell(cc++).setCellValue(o.getCreatedAt() == null ? 0 : o.getCreatedAt());
                         rr.createCell(cc++).setCellValue(o.getStatus() == null ? "" : o.getStatus());
                         rr.createCell(cc++).setCellValue(o.getCustomerUsername() == null ? "" : o.getCustomerUsername());
@@ -180,7 +188,7 @@ public class AdminServiceImpl implements AdminService {
                         rr.createCell(cc++).setCellValue(o.getTotalAmount() == null ? 0.0 : o.getTotalAmount());
                     }
                 }
-                for (int i = 0; i < 9; i++) sOrders.autoSizeColumn(i);
+                for (int i = 0; i < 10; i++) sOrders.autoSizeColumn(i);
 
                 Sheet sBookings = wb.createSheet("Bookings");
                 int br = 0;
@@ -260,7 +268,6 @@ public class AdminServiceImpl implements AdminService {
                 h.createCell(c++).setCellValue("Category");
                 h.createCell(c++).setCellValue("Price");
                 h.createCell(c++).setCellValue("Available");
-                h.createCell(c++).setCellValue("CreatedAt");
 
                 if (menu != null) {
                     for (MenuItem mi : menu) {
@@ -272,11 +279,10 @@ public class AdminServiceImpl implements AdminService {
                         rr.createCell(cc++).setCellValue(mi.getCategory() == null ? "" : mi.getCategory());
                         rr.createCell(cc++).setCellValue(mi.getPrice() == null ? 0.0 : mi.getPrice());
                         rr.createCell(cc++).setCellValue(mi.getAvailable() == null ? "" : String.valueOf(mi.getAvailable()));
-                        rr.createCell(cc++).setCellValue(mi.getCreatedAt() == null ? 0 : mi.getCreatedAt());
                     }
                 }
 
-                for (int i = 0; i < 6; i++) s.autoSizeColumn(i);
+                for (int i = 0; i < 5; i++) s.autoSizeColumn(i);
                 wb.write(bos);
                 byte[] bytes = bos.toByteArray();
 
@@ -903,6 +909,162 @@ public class AdminServiceImpl implements AdminService {
         r.setApprovalStatus(cafe.getApprovalStatus() == null ? null : cafe.getApprovalStatus().name());
         r.setOwnerUsername(cafe.getOwner() == null ? null : cafe.getOwner().getUsername());
         return r;
+    }
+
+    private CafeImageRow toImageRow(CafeImage img) {
+        CafeImageRow r = new CafeImageRow();
+        r.setId(img.getId());
+        r.setFilename(img.getFilename());
+        r.setContentType(img.getContentType());
+        r.setSize(img.getSize());
+        r.setCover(img.getCover());
+        r.setUrl("/api/public/cafe-images/" + img.getId());
+        return r;
+    }
+
+    @Override
+    public ResponseEntity<CafeProfileResponse> updateCafeProfile(Long cafeId, CafeProfileRequest request) {
+        try {
+            if (cafeId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (request == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            cafe.setCafeName(request.getCafeName() == null ? null : request.getCafeName().trim());
+            cafe.setOwnerNames(request.getOwnerNames());
+            cafe.setPocDesignation(request.getPocDesignation());
+            cafe.setDescription(request.getDescription());
+            cafe.setPhone(request.getPhone());
+            cafe.setEmail(request.getEmail());
+            cafe.setWhatsappNumber(request.getWhatsappNumber());
+            cafe.setAddressLine(request.getAddressLine());
+            cafe.setCity(request.getCity());
+            cafe.setState(request.getState());
+            cafe.setPincode(request.getPincode());
+            cafe.setOpeningTime(request.getOpeningTime());
+            cafe.setClosingTime(request.getClosingTime());
+            cafe.setFssaiNumber(request.getFssaiNumber());
+            cafe.setPanNumber(request.getPanNumber());
+            cafe.setGstin(request.getGstin());
+            cafe.setShopLicenseNumber(request.getShopLicenseNumber());
+            cafe.setBankAccountNumber(request.getBankAccountNumber());
+            cafe.setBankIfsc(request.getBankIfsc());
+            cafe.setBankAccountHolderName(request.getBankAccountHolderName());
+            cafe.setActive(request.getActive());
+
+            cafeRepository.save(cafe);
+            return ResponseEntity.ok(toCafeResponse(cafe));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<List<CafeImageRow>> listCafeImages(Long cafeId) {
+        try {
+            if (cafeId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            List<CafeImage> imgs = cafeImageRepository.findByCafeId(cafeId);
+            List<CafeImageRow> rows = (imgs == null ? List.<CafeImageRow>of() : imgs.stream().filter(i -> i != null).map(this::toImageRow).toList());
+            return ResponseEntity.ok(rows);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<CafeImageRow> uploadCafeImage(Long cafeId, MultipartFile file, Boolean cover) {
+        try {
+            if (cafeId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            if (file == null || file.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            Files.createDirectories(Path.of(cafeImagesDir));
+
+            String orig = file.getOriginalFilename() == null ? "image" : file.getOriginalFilename();
+            String safe = orig.replaceAll("[^a-zA-Z0-9._-]", "_");
+            String storedName = UUID.randomUUID() + "_" + safe;
+            Path target = Path.of(cafeImagesDir).resolve(storedName);
+            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+
+            boolean makeCover = Boolean.TRUE.equals(cover);
+            if (makeCover) {
+                try {
+                    List<CafeImage> existing = cafeImageRepository.findByCafeId(cafeId);
+                    if (existing != null) {
+                        for (CafeImage img : existing) {
+                            if (img == null) continue;
+                            if (Boolean.TRUE.equals(img.getCover())) {
+                                img.setCover(false);
+                                cafeImageRepository.save(img);
+                            }
+                        }
+                    }
+                } catch (RuntimeException ignored) {
+                }
+            }
+
+            CafeImage img = new CafeImage();
+            img.setCafe(cafe);
+            img.setFilename(orig);
+            img.setContentType(file.getContentType() == null ? "application/octet-stream" : file.getContentType());
+            img.setFilePath(target.toAbsolutePath().toString());
+            img.setSize(file.getSize());
+            img.setCover(makeCover);
+            cafeImageRepository.save(img);
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(toImageRow(img));
+        } catch (Exception ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<String> deleteCafeImage(Long cafeId, Long imageId) {
+        try {
+            if (cafeId == null || imageId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            CafeImage img = cafeImageRepository.findById(imageId).orElse(null);
+            if (img == null || img.getCafe() == null || img.getCafe().getId() == null || !img.getCafe().getId().equals(cafeId)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Not found");
+            }
+
+            try {
+                if (img.getFilePath() != null && !img.getFilePath().isBlank()) {
+                    Files.deleteIfExists(Path.of(img.getFilePath()));
+                }
+            } catch (Exception ignored) {
+            }
+
+            cafeImageRepository.deleteById(imageId);
+            return ResponseEntity.ok("Deleted");
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to delete");
+        }
     }
 
     @Override
