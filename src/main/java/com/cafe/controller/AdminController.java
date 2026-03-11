@@ -1,35 +1,40 @@
 package com.cafe.controller;
 
-import com.cafe.dto.AdminDecisionRequest;
-import com.cafe.dto.AdminCafeRow;
-import com.cafe.dto.AdminOwnerRow;
-import com.cafe.dto.AdminUserDetail;
-import com.cafe.dto.AdminUserRow;
-import com.cafe.dto.CafeProfileRequest;
-import com.cafe.dto.CafeProfileResponse;
-import com.cafe.dto.CafeImageRow;
-import com.cafe.dto.RegisterRequest;
-import com.cafe.dto.MenuItemRow;
-import com.cafe.dto.CafeDocumentRow;
-import com.cafe.dto.AdminAnalyticsSummary;
-import com.cafe.dto.AdminAnalyticsDetailsResponse;
-import com.cafe.service.AdminService;
-import jakarta.validation.Valid;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
-import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import java.util.List;
+
+import com.cafe.dto.AdminAnalyticsDetailsResponse;
+import com.cafe.dto.AdminAnalyticsSummary;
+import com.cafe.dto.AdminCafeRow;
+import com.cafe.dto.AdminDecisionRequest;
+import com.cafe.dto.AdminOwnerRow;
+import com.cafe.dto.AdminUserDetail;
+import com.cafe.dto.AdminUserRow;
+import com.cafe.dto.CafeDocumentRow;
+import com.cafe.dto.CafeImageRow;
+import com.cafe.dto.CafeProfileRequest;
+import com.cafe.dto.CafeProfileResponse;
+import com.cafe.dto.MenuAvailabilityRequest;
+import com.cafe.dto.MenuItemRequest;
+import com.cafe.dto.MenuItemRow;
+import com.cafe.dto.RegisterRequest;
+import com.cafe.service.AdminService;
+
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -90,6 +95,49 @@ public class AdminController {
     @GetMapping("/cafes/{id}/menu")
     public ResponseEntity<List<MenuItemRow>> listCafeMenu(@PathVariable Long id) {
         return adminService.listCafeMenu(id);
+    }
+
+    @PostMapping("/cafes/{id}/menu")
+    public ResponseEntity<MenuItemRow> createCafeMenuItem(
+            @PathVariable Long id,
+            @Valid @RequestBody MenuItemRequest request
+    ) {
+        return adminService.createCafeMenuItem(id, request);
+    }
+
+    @PutMapping("/cafes/{id}/menu/{menuItemId}")
+    public ResponseEntity<MenuItemRow> updateCafeMenuItem(
+            @PathVariable Long id,
+            @PathVariable Long menuItemId,
+            @Valid @RequestBody MenuItemRequest request
+    ) {
+        return adminService.updateCafeMenuItem(id, menuItemId, request);
+    }
+
+    @PutMapping("/cafes/{id}/menu/{menuItemId}/availability")
+    public ResponseEntity<MenuItemRow> updateCafeMenuItemAvailability(
+            @PathVariable Long id,
+            @PathVariable Long menuItemId,
+            @Valid @RequestBody MenuAvailabilityRequest request
+    ) {
+        return adminService.updateCafeMenuItemAvailability(id, menuItemId, request);
+    }
+
+    @PostMapping(value = "/cafes/{id}/menu/{menuItemId}/image", consumes = {"multipart/form-data"})
+    public ResponseEntity<MenuItemRow> uploadCafeMenuItemImage(
+            @PathVariable Long id,
+            @PathVariable Long menuItemId,
+            @RequestPart("file") MultipartFile file
+    ) {
+        return adminService.uploadCafeMenuItemImage(id, menuItemId, file);
+    }
+
+    @DeleteMapping("/cafes/{id}/menu/{menuItemId}")
+    public ResponseEntity<String> deleteCafeMenuItem(
+            @PathVariable Long id,
+            @PathVariable Long menuItemId
+    ) {
+        return adminService.deleteCafeMenuItem(id, menuItemId);
     }
 
     @GetMapping("/cafes/{id}/export/history.xlsx")

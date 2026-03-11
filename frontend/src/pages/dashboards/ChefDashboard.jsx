@@ -42,6 +42,21 @@ export default function ChefDashboard() {
     })
   }, [orders])
 
+  const stats = useMemo(() => {
+    const list = Array.isArray(orders) ? orders : []
+    let total = list.length
+    let active = 0
+    let ready = 0
+    let served = 0
+    for (const o of list) {
+      const s = String(o?.status || '').toUpperCase()
+      if (s === 'PLACED' || s === 'PREPARING') active += 1
+      if (s === 'READY') ready += 1
+      if (s === 'SERVED') served += 1
+    }
+    return { total, active, ready, served }
+  }, [orders])
+
   const totalPages = useMemo(() => {
     const size = Number(pageSize) || 10
     return Math.max(1, Math.ceil(incoming.length / size))
@@ -88,6 +103,25 @@ export default function ChefDashboard() {
       {err ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div> : null}
       {msg ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{msg}</div> : null}
       {loading ? <div className="mt-4 text-sm text-slate-600">Loading...</div> : null}
+
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+          <div className="text-xs font-semibold text-slate-600">Total Orders</div>
+          <div className="mt-1 text-2xl font-extrabold">{stats.total}</div>
+        </div>
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+          <div className="text-xs font-semibold text-slate-600">Active</div>
+          <div className="mt-1 text-2xl font-extrabold">{stats.active}</div>
+        </div>
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+          <div className="text-xs font-semibold text-slate-600">Ready</div>
+          <div className="mt-1 text-2xl font-extrabold">{stats.ready}</div>
+        </div>
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+          <div className="text-xs font-semibold text-slate-600">Served</div>
+          <div className="mt-1 text-2xl font-extrabold">{stats.served}</div>
+        </div>
+      </div>
 
       {!loading ? (
         <div className="mt-4 grid gap-3">

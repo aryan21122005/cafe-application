@@ -1,12 +1,13 @@
 package com.cafe.repository;
 
-import com.cafe.entity.CafeOrder;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.util.List;
-import java.util.Optional;
+import com.cafe.entity.CafeOrder;
 
 public interface CafeOrderRepository extends JpaRepository<CafeOrder, Long> {
 
@@ -15,6 +16,8 @@ public interface CafeOrderRepository extends JpaRepository<CafeOrder, Long> {
     List<CafeOrder> findByCustomerPhoneOrderByCreatedAtDesc(String customerPhone);
 
     List<CafeOrder> findByCustomerUsernameOrderByCreatedAtDesc(String customerUsername);
+
+    List<CafeOrder> findByBookingId(Long bookingId);
 
     @Query("select distinct o from CafeOrder o left join fetch o.items")
     List<CafeOrder> findAllWithItems();

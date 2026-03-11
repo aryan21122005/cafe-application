@@ -8,7 +8,6 @@ export default function WaiterDashboard() {
 
   const [orders, setOrders] = useState([])
   const [bookings, setBookings] = useState([])
-  const [tableByOrderId, setTableByOrderId] = useState({})
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
@@ -22,7 +21,7 @@ export default function WaiterDashboard() {
     setMsg('')
     setLoading(true)
     try {
-      const [o, b] = await Promise.all([listStaffOrders(username, 'READY'), listStaffApprovedBookings(username)])
+      const [o, b] = await Promise.all([listStaffOrders(username), listStaffApprovedBookings(username)])
       setOrders(Array.isArray(o) ? o : [])
       setBookings(Array.isArray(b) ? b : [])
     } catch (e) {
@@ -64,6 +63,21 @@ export default function WaiterDashboard() {
     return Array.from(set)
   }, [bookings])
 
+  const stats = useMemo(() => {
+    const list = Array.isArray(orders) ? orders : []
+    let total = list.length
+    let ready = 0
+    let served = 0
+    for (const o of list) {
+      const s = String(o?.status || '').toUpperCase()
+      if (s === 'READY') ready += 1
+      if (s === 'SERVED') served += 1
+    }
+    const approvedBookings = (Array.isArray(bookings) ? bookings : []).length
+    const uniqueTables = tables.length
+    return { total, ready, served, approvedBookings, uniqueTables }
+  }, [orders, bookings, tables.length])
+
   return (
     <div className="rounded-2xl border border-black/10 bg-white/70 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -71,7 +85,7 @@ export default function WaiterDashboard() {
           <div className="text-xs text-slate-500">Waiter / Orders</div>
           <div className="mt-1 text-2xl font-extrabold">Ready Orders</div>
           <div className="mt-1 text-xs text-slate-600">Serve to booked table</div>
-        </div>
+        </div>assign
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 text-sm text-slate-700">
             <span>Show</span>
@@ -99,6 +113,29 @@ export default function WaiterDashboard() {
       {msg ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{msg}</div> : null}
       {loading ? <div className="mt-4 text-sm text-slate-600">Loading...</div> : null}
 
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+          <div className="text-xs font-semibold text-slate-600">Total Orders</div>
+          <div className="mt-1 text-2xl font-extrabold">{stats.total}</div>
+        </div>
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+          <div className="text-xs font-semibold text-slate-600">Ready</div>
+          <div className="mt-1 text-2xl font-extrabold">{stats.ready}</div>
+        </div>
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+          <div className="text-xs font-semibold text-slate-600">Served</div>
+          <div className="mt-1 text-2xl font-extrabold">{stats.served}</div>
+        </div>
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+          <div className="text-xs font-semibold text-slate-600">Approved Bookings</div>
+          <div className="mt-1 text-2xl font-extrabold">{stats.approvedBookings}</div>
+        </div>
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+          <div className="text-xs font-semibold text-slate-600">Active Tables</div>
+          <div className="mt-1 text-2xl font-extrabold">{stats.uniqueTables}</div>
+        </div>
+      </div>
+
       {!loading ? (
         <div className="mt-4 grid gap-3">
           {readyOrders.length > 0 ? (
@@ -116,43 +153,19 @@ export default function WaiterDashboard() {
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-end gap-2">
-                  <div className="grid gap-1">
-                    <div className="text-xs font-semibold text-slate-600">Booked table *</div>
-                    <select
-                      className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none"
-                      value={tableByOrderId[o.id] || ''}
-                      onChange={(e) => setTableByOrderId((prev) => ({ ...(prev || {}), [o.id]: e.target.value }))}
-                    >
-                      <option value="">Select table</option>
-                      {tables.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <div className="text-sm font-semibold text-slate-700">Table: {o.allocatedTable || '-'}</div>
 
                   <button
                     type="button"
                     className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
                     disabled={loading}
                     onClick={async () => {
-                      const table = String(tableByOrderId[o.id] || '').trim()
-                      if (!table) {
-                        setErr('Please select a booked table first.')
-                        return
-                      }
                       setErr('')
                       setMsg('')
                       setLoading(true)
                       try {
-                        await serveStaffOrder(username, o.id, table)
+                        await serveStaffOrder(username, o.id)
                         setMsg('Served')
-                        setTableByOrderId((prev) => {
-                          const next = { ...(prev || {}) }
-                          delete next[o.id]
-                          return next
-                        })
                         await refresh()
                       } catch (e) {
                         const m = e?.response?.data

@@ -10,7 +10,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -19,10 +18,8 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "function_capacities", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"cafe_id", "functionType"})
-})
-public class FunctionCapacity {
+@Table(name = "cafe_amenities")
+public class CafeAmenity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -33,21 +30,14 @@ public class FunctionCapacity {
     private Cafe cafe;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private FunctionType functionType;
 
     @Column(nullable = false)
-    private Integer tablesAvailable;
-
-    @Column(columnDefinition = "TEXT")
-    private String tableLabels;
-
-    private Integer seatsPerTable;
-
-    private Integer seatsAvailable;
-
-    private Double price;
+    private String name;
 
     @Column(nullable = false)
     private Boolean enabled = true;
+
+    @Column(nullable = false)
+    private Long createdAt = System.currentTimeMillis();
 }

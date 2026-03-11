@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { deleteCustomerBooking, listCustomerBookings } from '../../lib/api.js'
 import { getSession } from '../../lib/auth.js'
 
@@ -17,6 +18,8 @@ function TrashIcon({ className }) {
 export default function CustomerBookingsPage() {
   const session = getSession()
   const username = session?.username
+
+  const navigate = useNavigate()
 
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(false)
@@ -44,6 +47,7 @@ export default function CustomerBookingsPage() {
         b?.bookingTime,
         b?.guests,
         b?.amenityPreference,
+        b?.functionType,
         b?.allocatedTable,
         b?.status,
         b?.denialReason
@@ -174,6 +178,7 @@ export default function CustomerBookingsPage() {
                   <th className="px-3 py-2">Time</th>
                   <th className="px-3 py-2">Guests</th>
                   <th className="px-3 py-2">Preference</th>
+                  <th className="px-3 py-2">Function</th>
                   <th className="px-3 py-2">Allocated</th>
                   <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2">Payment</th>
@@ -192,6 +197,7 @@ export default function CustomerBookingsPage() {
                       <td className="px-3 py-2 text-slate-700">{b.bookingTime || '-'}</td>
                       <td className="px-3 py-2 text-slate-700">{b.guests ?? '-'}</td>
                       <td className="px-3 py-2 text-slate-700">{b.amenityPreference || '-'}</td>
+                      <td className="px-3 py-2 text-slate-700">{b.functionType || '-'}</td>
                       <td className="px-3 py-2 text-slate-700">{b.allocatedTable || '-'}</td>
                       <td className="px-3 py-2 text-slate-700">{b.status || 'PENDING'}</td>
                       <td className="px-3 py-2 text-slate-700">{b.paymentStatus || 'UNPAID'}</td>
@@ -199,6 +205,23 @@ export default function CustomerBookingsPage() {
                       <td className="px-3 py-2 text-slate-600">{b.paidAt ? new Date(Number(b.paidAt)).toLocaleString() : '-'}</td>
                       <td className="px-3 py-2 text-slate-600">{b.denialReason || '-'}</td>
                       <td className="px-3 py-2">
+                        {String(b?.paymentStatus || 'UNPAID').toUpperCase() === 'PAID' &&
+                        String(b?.status || 'PENDING').toUpperCase() === 'APPROVED' ? (
+                          <button
+                            type="button"
+                            className="mr-2 rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-white/80 disabled:opacity-50"
+                            disabled={loading}
+                            onClick={() => {
+                              const cafeId = b?.cafeId
+                              if (!cafeId) return
+                              navigate(`/dashboard/customer/cafes/${cafeId}?bookingId=${encodeURIComponent(String(b.id))}`)
+                            }}
+                            title="Add food"
+                          >
+                            Add Food
+                          </button>
+                        ) : null}
+
                         <button
                           type="button"
                           className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-white/80 disabled:opacity-50"

@@ -263,7 +263,7 @@ public class StaffController {
     public ResponseEntity<CafeOrderRow> serveOrder(
             @RequestHeader(value = "X-USERNAME", required = false) String staffUsername,
             @PathVariable Long id,
-            @Valid @RequestBody ServeOrderRequest request
+            @RequestBody(required = false) ServeOrderRequest request
     ) {
         try {
             StaffContext ctx = requireStaffContext(staffUsername);
@@ -271,9 +271,6 @@ public class StaffController {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
             if (id == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-            if (request == null || request.getAllocatedTable() == null || request.getAllocatedTable().isBlank()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
 
@@ -287,9 +284,23 @@ public class StaffController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
 
-            String table = request.getAllocatedTable().trim();
-            if (!isAllocatedTableValidForCafe(ctx.cafe.getId(), table)) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+            Long bid = o.getBookingId();
+            if (bid == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            CafeBooking b = cafeBookingRepository.findById(bid).orElse(null);
+            if (b == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (b.getCafe() == null || b.getCafe().getId() == null || !b.getCafe().getId().equals(ctx.cafe.getId())) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (!"APPROVED".equalsIgnoreCase(String.valueOf(b.getStatus()))) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            String table = b.getAllocatedTable() == null ? null : b.getAllocatedTable().trim();
+            if (table == null || table.isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
 
             o.setAllocatedTable(table);
@@ -382,6 +393,7 @@ public class StaffController {
         r.setStatus(b.getStatus());
         r.setDenialReason(b.getDenialReason());
         r.setAmenityPreference(b.getAmenityPreference());
+        r.setFunctionType(b.getFunctionType() == null ? null : b.getFunctionType().name());
         r.setAllocatedTable(b.getAllocatedTable());
         r.setCreatedAt(b.getCreatedAt());
         return r;

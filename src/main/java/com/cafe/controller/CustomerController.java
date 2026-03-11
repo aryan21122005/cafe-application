@@ -27,6 +27,7 @@ import com.cafe.dto.CafeBookingRequest;
 import com.cafe.dto.CafeBookingRow;
 import com.cafe.dto.CafeOrderRequest;
 import com.cafe.dto.CafeOrderRow;
+import com.cafe.dto.RazorpayConfirmBookingFoodOrderRequest;
 import com.cafe.dto.RazorpayConfirmCartOrderRequest;
 import com.cafe.dto.RazorpayCreateOrderResponse;
 import com.cafe.dto.RazorpayVerifyPaymentRequest;
@@ -503,6 +504,269 @@ public class CustomerController {
         }
     }
 
+    @PostMapping("/bookings/{id}/food/payment/razorpay/order")
+    public ResponseEntity<?> createRazorpayOrderForBookingFood(
+            @RequestHeader(value = "X-USERNAME", required = false) String customerUsername,
+            @PathVariable Long id,
+            @Valid @RequestBody CafeOrderRequest request
+    ) {
+        try {
+            User customer = requireCustomer(customerUsername);
+            if (customer == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            if (id == null || request == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (razorpayKeyId == null || razorpayKeyId.isBlank()) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Razorpay key id not configured. Set environment variable RAZORPAY_KEY_ID (or razorpay.key_id in application.properties).");
+            }
+            if (razorpayKeySecret == null || razorpayKeySecret.isBlank()) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Razorpay key secret not configured. Set environment variable RAZORPAY_KEY_SECRET (or razorpay.key_secret in application.properties).");
+            }
+
+            CafeBooking b = cafeBookingRepository.findById(id).orElse(null);
+            if (b == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Booking not found");
+            }
+            if (b.getCustomerUsername() == null || !b.getCustomerUsername().equals(customer.getUsername())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            if (!"PAID".equalsIgnoreCase(String.valueOf(b.getPaymentStatus() == null ? "UNPAID" : b.getPaymentStatus()))) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Booking is not paid");
+            }
+            if (!"APPROVED".equalsIgnoreCase(String.valueOf(b.getStatus() == null ? "PENDING" : b.getStatus()))) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Booking must be approved before adding food");
+            }
+
+            List<CafeOrder> existing = cafeOrderRepository.findByBookingId(b.getId());
+            if (existing != null) {
+                for (CafeOrder eo : existing) {
+                    if (eo == null) continue;
+                    if ("PAID".equalsIgnoreCase(String.valueOf(eo.getPaymentStatus() == null ? "UNPAID" : eo.getPaymentStatus()))) {
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Food already ordered for this booking");
+                    }
+                }
+            }
+
+            Cafe cafe = b.getCafe();
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Cafe not found");
+            }
+            if (request.getCafeId() == null || !request.getCafeId().equals(cafe.getId())) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Cafe mismatch");
+            }
+
+            double total = 0.0;
+            if (request.getItems() != null && !request.getItems().isEmpty()) {
+                for (var it : request.getItems()) {
+                    MenuItem mi = menuItemRepository.findById(it.getMenuItemId()).orElse(null);
+                    if (mi == null || !Boolean.TRUE.equals(mi.getAvailable())) {
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid or unavailable menu item");
+                    }
+                    Integer qty = it.getQty();
+                    if (qty == null || qty <= 0) {
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid quantity");
+                    }
+                    total += mi.getPrice() * qty;
+                }
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Cart is empty");
+            }
+
+            long amountPaise = Math.max(0L, Math.round(total * 100.0));
+            if (amountPaise <= 0L) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Order total amount must be greater than 0");
+            }
+
+            RazorpayClient client = new RazorpayClient(razorpayKeyId, razorpayKeySecret);
+            JSONObject req = new JSONObject();
+            req.put("amount", amountPaise);
+            req.put("currency", "INR");
+            req.put("receipt", "booking_food_" + b.getId() + "_" + System.currentTimeMillis());
+            req.put("payment_capture", 1);
+
+            Order rpOrder = client.orders.create(req);
+            String rpOrderId = rpOrder.get("id");
+
+            RazorpayCreateOrderResponse res = new RazorpayCreateOrderResponse();
+            res.setCafeOrderId(null);
+            res.setOrderNumber(null);
+            res.setRazorpayKeyId(razorpayKeyId);
+            res.setRazorpayOrderId(rpOrderId);
+            res.setAmountPaise(amountPaise);
+            res.setCurrency("INR");
+            res.setCafeName(cafe.getCafeName());
+            res.setCustomerName(b.getCustomerName());
+            res.setCustomerPhone(b.getCustomerPhone());
+            return ResponseEntity.ok(res);
+        } catch (RazorpayException ex) {
+            String msg = ex.getMessage();
+            if (msg == null || msg.isBlank()) msg = "Razorpay error";
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body("Razorpay: " + msg);
+        } catch (Exception ex) {
+            String msg = ex.getMessage();
+            if (msg == null || msg.isBlank()) msg = "Failed to create Razorpay order";
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(msg);
+        }
+    }
+
+    @PostMapping("/bookings/{id}/food/payment/razorpay/confirm")
+    public ResponseEntity<?> confirmBookingFoodOrderAfterPayment(
+            @RequestHeader(value = "X-USERNAME", required = false) String customerUsername,
+            @PathVariable Long id,
+            @Valid @RequestBody RazorpayConfirmBookingFoodOrderRequest request
+    ) {
+        try {
+            User customer = requireCustomer(customerUsername);
+            if (customer == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            if (id == null || request == null || request.getOrder() == null || request.getPayment() == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (razorpayKeySecret == null || razorpayKeySecret.isBlank()) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Razorpay key secret not configured. Set environment variable RAZORPAY_KEY_SECRET (or razorpay.key_secret in application.properties).");
+            }
+
+            CafeBooking b = cafeBookingRepository.findById(id).orElse(null);
+            if (b == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Booking not found");
+            }
+            if (b.getCustomerUsername() == null || !b.getCustomerUsername().equals(customer.getUsername())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            if (!"PAID".equalsIgnoreCase(String.valueOf(b.getPaymentStatus() == null ? "UNPAID" : b.getPaymentStatus()))) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Booking is not paid");
+            }
+            if (!"APPROVED".equalsIgnoreCase(String.valueOf(b.getStatus() == null ? "PENDING" : b.getStatus()))) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Booking must be approved before adding food");
+            }
+
+            List<CafeOrder> existing = cafeOrderRepository.findByBookingId(b.getId());
+            if (existing != null) {
+                for (CafeOrder eo : existing) {
+                    if (eo == null) continue;
+                    if ("PAID".equalsIgnoreCase(String.valueOf(eo.getPaymentStatus() == null ? "UNPAID" : eo.getPaymentStatus()))) {
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Food already ordered for this booking");
+                    }
+                }
+            }
+
+            CafeOrderRequest or = request.getOrder();
+            RazorpayVerifyPaymentRequest pay = request.getPayment();
+
+            Cafe cafe = b.getCafe();
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Cafe not found");
+            }
+            if (or.getCafeId() == null || !or.getCafeId().equals(cafe.getId())) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Cafe mismatch");
+            }
+
+            if (or.getItems() == null || or.getItems().isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Cart is empty");
+            }
+
+            String payload = pay.getRazorpayOrderId() + "|" + pay.getRazorpayPaymentId();
+            String computed = hmacSha256Hex(payload, razorpayKeySecret);
+            if (!safeEquals(computed, pay.getRazorpaySignature())) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid payment signature");
+            }
+
+            double total = 0.0;
+            List<CafeOrderItem> items = new ArrayList<>();
+            for (var it : or.getItems()) {
+                if (it == null || it.getMenuItemId() == null || it.getQty() == null || it.getQty() <= 0) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+                }
+                MenuItem mi = menuItemRepository.findById(it.getMenuItemId()).orElse(null);
+                if (mi == null || !Boolean.TRUE.equals(mi.getAvailable())) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid or unavailable menu item");
+                }
+                CafeOrderItem oi = new CafeOrderItem();
+                oi.setMenuItemId(mi.getId());
+                oi.setItemName(mi.getName());
+                oi.setPrice(mi.getPrice());
+                oi.setQty(it.getQty());
+                items.add(oi);
+                total += (mi.getPrice() * it.getQty());
+            }
+            long amountPaise = Math.max(0L, Math.round(total * 100.0));
+            if (amountPaise <= 0L) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Order total amount must be greater than 0");
+            }
+
+            if (razorpayKeyId == null || razorpayKeyId.isBlank()) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Razorpay key id not configured. Set environment variable RAZORPAY_KEY_ID (or razorpay.key_id in application.properties).");
+            }
+            RazorpayClient client = new RazorpayClient(razorpayKeyId, razorpayKeySecret);
+            Order rpOrder = client.orders.fetch(pay.getRazorpayOrderId());
+            Object rpAmountObj = rpOrder.get("amount");
+            long rpAmount = Long.parseLong(String.valueOf(rpAmountObj));
+            String rpStatus = rpOrder.get("status");
+            if (rpAmount != amountPaise) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Payment amount mismatch");
+            }
+            if (rpStatus != null && !String.valueOf(rpStatus).isBlank()) {
+                String s = String.valueOf(rpStatus).trim().toLowerCase();
+                if ("failed".equals(s)) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Payment not completed");
+                }
+            }
+
+            String allocated = (b.getAllocatedTable() == null ? null : b.getAllocatedTable().trim());
+
+            CafeOrder o = new CafeOrder();
+            o.setCafe(cafe);
+            o.setCustomerName(or.getCustomerName().trim());
+            o.setCustomerUsername(customer.getUsername());
+            o.setCustomerPhone(or.getCustomerPhone().trim());
+            o.setAmenityPreference(b.getAmenityPreference());
+            o.setAllocatedTable(allocated);
+            o.setStatus("PLACED");
+            o.setTotalAmount(total);
+            o.setPaymentStatus("PAID");
+            o.setRazorpayOrderId(pay.getRazorpayOrderId());
+            o.setRazorpayPaymentId(pay.getRazorpayPaymentId());
+            o.setPaidAt(System.currentTimeMillis());
+            o.setBookingId(b.getId());
+
+            Integer maxNo = cafeOrderRepository.findMaxOrderNumberByCafeId(cafe.getId());
+            o.setOrderNumber((maxNo == null ? 0 : maxNo) + 1);
+
+            for (CafeOrderItem oi : items) {
+                oi.setOrder(o);
+            }
+            o.setItems(items);
+
+            cafeOrderRepository.save(o);
+
+            Payment p = new Payment();
+            p.setOrder(o);
+            p.setProvider("RAZORPAY");
+            p.setCurrency("INR");
+            p.setAmountPaise(amountPaise);
+            p.setRazorpayOrderId(pay.getRazorpayOrderId());
+            p.setRazorpayPaymentId(pay.getRazorpayPaymentId());
+            p.setRazorpaySignature(pay.getRazorpaySignature());
+            p.setStatus("PAID");
+            paymentRepository.save(p);
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(toOrderRow(o));
+        } catch (RazorpayException ex) {
+            String msg = ex.getMessage();
+            if (msg == null || msg.isBlank()) msg = "Razorpay error";
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body("Razorpay: " + msg);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to confirm order");
+        }
+    }
+
     @PostMapping("/payment/razorpay/confirm-cart-order")
     public ResponseEntity<?> confirmCartOrderAfterPayment(
             @RequestHeader(value = "X-USERNAME", required = false) String customerUsername,
@@ -523,16 +787,26 @@ public class CustomerController {
 
             CafeOrderRequest or = request.getOrder();
             RazorpayVerifyPaymentRequest pay = request.getPayment();
+            if (or == null || pay == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
 
             Cafe cafe = requireApprovedCafe(or.getCafeId());
             if (cafe == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Cafe not found or not approved");
             }
-            if (or.getCustomerName() == null || or.getCustomerName().isBlank() || or.getCustomerPhone() == null || or.getCustomerPhone().isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Customer name and phone required");
+
+            if (or.getBookingDate() == null || or.getBookingDate().isBlank()
+                    || or.getBookingTime() == null || or.getBookingTime().isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Booking date and time are required");
             }
+
             if (or.getItems() == null || or.getItems().isEmpty()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Cart is empty");
+            }
+
+            if (or.getGuests() != null && or.getGuests() <= 0) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Guests must be greater than 0");
             }
 
             // Verify Razorpay signature
@@ -611,12 +885,19 @@ public class CustomerController {
             b.setCustomerUsername(customer.getUsername());
             b.setCustomerName(o.getCustomerName());
             b.setCustomerPhone(o.getCustomerPhone());
-            b.setBookingDate(LocalDate.now().toString());
-            b.setBookingTime(LocalTime.now().withNano(0).toString());
-            b.setGuests(1);
+            b.setBookingDate(or.getBookingDate().trim());
+            b.setBookingTime(or.getBookingTime().trim());
+            b.setGuests(or.getGuests() == null ? 1 : or.getGuests());
             b.setAmenityPreference(or.getAmenityPreference());
+            FunctionType ft;
+            try {
+                ft = FunctionType.valueOf(String.valueOf(or.getFunctionType() == null ? "DINE_IN" : or.getFunctionType()).trim());
+            } catch (Exception ex) {
+                ft = FunctionType.DINE_IN;
+            }
+            b.setFunctionType(ft);
             b.setAllocatedTable(allocated);
-            b.setStatus("APPROVED");
+            b.setStatus("PENDING");
             b.setDenialReason(null);
             b.setPaymentStatus("PAID");
             b.setRazorpayOrderId(pay.getRazorpayOrderId());
@@ -804,6 +1085,13 @@ public class CustomerController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
 
+            FunctionType ft;
+            try {
+                ft = FunctionType.valueOf(String.valueOf(request.getFunctionType()).trim());
+            } catch (Exception ex) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
             CafeBooking b = new CafeBooking();
             b.setCafe(cafe);
             b.setCustomerUsername(customer.getUsername());
@@ -813,6 +1101,8 @@ public class CustomerController {
             b.setBookingTime(request.getBookingTime().trim());
             b.setGuests(request.getGuests());
             b.setAmenityPreference(request.getAmenityPreference());
+            b.setFunctionType(ft);
+            b.setAllocatedTable(request.getAllocatedTable());
             b.setPaymentStatus("UNPAID");
             b.setRazorpayOrderId(null);
             b.setRazorpayPaymentId(null);
@@ -1040,6 +1330,7 @@ public class CustomerController {
         r.setPaidAt(b.getPaidAt());
         r.setDenialReason(b.getDenialReason());
         r.setAmenityPreference(b.getAmenityPreference());
+        r.setFunctionType(b.getFunctionType() == null ? null : b.getFunctionType().name());
         r.setAllocatedTable(b.getAllocatedTable());
         r.setCreatedAt(b.getCreatedAt());
         return r;

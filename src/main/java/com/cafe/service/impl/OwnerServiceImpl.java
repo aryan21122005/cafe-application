@@ -22,6 +22,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.cafe.dto.AdminUserDetail;
 import com.cafe.dto.BookingDecisionRequest;
+import com.cafe.dto.CafeAmenityRequest;
+import com.cafe.dto.CafeAmenityRow;
 import com.cafe.dto.CafeBookingRow;
 import com.cafe.dto.CafeDocumentRow;
 import com.cafe.dto.CafeImageRow;
@@ -39,6 +41,7 @@ import com.cafe.dto.OwnerStaffRow;
 import com.cafe.entity.Address;
 import com.cafe.entity.ApprovalStatus;
 import com.cafe.entity.Cafe;
+import com.cafe.entity.CafeAmenity;
 import com.cafe.entity.CafeBooking;
 import com.cafe.entity.CafeDocument;
 import com.cafe.entity.CafeImage;
@@ -51,6 +54,7 @@ import com.cafe.entity.MenuItem;
 import com.cafe.entity.PersonalDetails;
 import com.cafe.entity.Role;
 import com.cafe.entity.User;
+import com.cafe.repository.CafeAmenityRepository;
 import com.cafe.repository.CafeBookingRepository;
 import com.cafe.repository.CafeDocumentRepository;
 import com.cafe.repository.CafeImageRepository;
@@ -90,6 +94,9 @@ public class OwnerServiceImpl implements OwnerService {
 
     @Autowired
     private CafeOrderRepository cafeOrderRepository;
+
+    @Autowired
+    private CafeAmenityRepository cafeAmenityRepository;
 
     @Autowired
     private BCryptPasswordEncoder passwordEncoder;
@@ -172,20 +179,72 @@ public class OwnerServiceImpl implements OwnerService {
         }
     }
 
-    private String allocateDineInTable(Long cafeId, String preferredTable) {
-        FunctionCapacity cap = functionCapacityRepository.findByCafeIdAndFunctionType(cafeId, FunctionType.DINE_IN).orElse(null);
+    private List<String> parseDistinctCsv(String raw) {
+        List<String> out = new ArrayList<>();
+        if (raw == null || raw.isBlank()) return out;
+        for (String part : raw.split(",")) {
+            if (part == null) continue;
+            String t = part.trim();
+            if (t.isBlank()) continue;
+            if (!out.contains(t)) out.add(t);
+        }
+        return out;
+    }
+
+    private int computeTablesNeeded(Integer guests, Integer seatsPerTable) {
+        int g = (guests == null ? 0 : guests);
+        if (g <= 0) return 1;
+        int spt = (seatsPerTable == null ? 0 : seatsPerTable);
+        if (spt <= 0) return 1;
+        return (int) Math.ceil((double) g / (double) spt);
+    }
+
+    private String allocateTables(Long cafeId, FunctionType functionType, String bookingDate, String bookingTime, Integer guests, String preferredTablesCsv) {
+        if (functionType == null) return null;
+        FunctionCapacity cap = functionCapacityRepository.findByCafeIdAndFunctionType(cafeId, functionType).orElse(null);
         if (cap == null) return null;
         if (!Boolean.TRUE.equals(cap.getEnabled())) return null;
-        Integer available = cap.getTablesAvailable();
-        if (available == null || available <= 0) return null;
 
-        cap.setTablesAvailable(available - 1);
-        functionCapacityRepository.save(cap);
-        String pref = (preferredTable == null ? null : preferredTable.trim());
-        if (pref != null && !pref.isBlank()) {
-            return pref;
+        List<String> labels = parseDistinctCsv(cap.getTableLabels());
+        if (labels.isEmpty()) return null;
+
+        int tablesNeeded = computeTablesNeeded(guests, cap.getSeatsPerTable());
+        if (tablesNeeded <= 0) tablesNeeded = 1;
+        if (tablesNeeded > labels.size()) return null;
+
+        String bd = (bookingDate == null ? null : bookingDate.trim());
+        String bt = (bookingTime == null ? null : bookingTime.trim());
+
+        List<String> used = cafeBookingRepository.findByCafeIdOrderByCreatedAtDesc(cafeId).stream()
+                .filter(b -> b != null
+                        && functionType.equals(b.getFunctionType())
+                        && "APPROVED".equalsIgnoreCase(String.valueOf(b.getStatus()))
+                        && b.getAllocatedTable() != null
+                        && !b.getAllocatedTable().isBlank()
+                        && (bd == null || bd.isBlank() || (b.getBookingDate() != null && b.getBookingDate().trim().equalsIgnoreCase(bd)))
+                        && (bt == null || bt.isBlank() || (b.getBookingTime() != null && b.getBookingTime().trim().equalsIgnoreCase(bt))))
+                .flatMap(b -> parseDistinctCsv(b.getAllocatedTable()).stream())
+                .toList();
+
+        List<String> pref = parseDistinctCsv(preferredTablesCsv);
+        List<String> chosen = new ArrayList<>();
+
+        for (String p : pref) {
+            if (chosen.size() >= tablesNeeded) break;
+            if (p == null || p.isBlank()) continue;
+            if (!labels.contains(p)) continue;
+            if (used.contains(p)) continue;
+            if (!chosen.contains(p)) chosen.add(p);
         }
-        return "DINE_IN_TABLE_" + System.currentTimeMillis();
+
+        for (String t : labels) {
+            if (chosen.size() >= tablesNeeded) break;
+            if (used.contains(t)) continue;
+            if (!chosen.contains(t)) chosen.add(t);
+        }
+
+        if (chosen.size() != tablesNeeded) return null;
+        return String.join(", ", chosen);
     }
 
     @Override
@@ -239,8 +298,24 @@ public class OwnerServiceImpl implements OwnerService {
             if (curr.equals("APPROVED")) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
+            if (curr.equals("DENIED_WITH_REFUND")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
 
-            String allocated = allocateDineInTable(cafe.getId(), b.getAllocatedTable());
+            FunctionType ft = b.getFunctionType();
+            if (ft == null) {
+                ft = FunctionType.DINE_IN;
+                b.setFunctionType(ft);
+            }
+
+            String allocated = allocateTables(
+                    cafe.getId(),
+                    ft,
+                    b.getBookingDate(),
+                    b.getBookingTime(),
+                    b.getGuests(),
+                    b.getAllocatedTable()
+            );
             if (allocated == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
@@ -249,6 +324,56 @@ public class OwnerServiceImpl implements OwnerService {
 
             b.setStatus("APPROVED");
             b.setDenialReason(null);
+            cafeBookingRepository.save(b);
+
+            List<CafeOrder> linked = cafeOrderRepository.findByBookingId(b.getId());
+            if (linked != null) {
+                for (CafeOrder o : linked) {
+                    if (o == null) continue;
+                    o.setAllocatedTable(allocated);
+                    cafeOrderRepository.save(o);
+                }
+            }
+
+            return ResponseEntity.ok(toBookingRow(b));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<CafeBookingRow> denyBookingWithRefund(String ownerUsername, Long bookingId, BookingDecisionRequest request) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (bookingId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (request == null || request.getReason() == null || request.getReason().isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            CafeBooking b = cafeBookingRepository.findByIdAndCafeId(bookingId, cafe.getId()).orElse(null);
+            if (b == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            String curr = String.valueOf(b.getStatus() == null ? "PENDING" : b.getStatus()).trim().toUpperCase();
+            if (curr.equals("APPROVED")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (curr.equals("DENIED_WITH_REFUND")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            b.setStatus("DENIED_WITH_REFUND");
+            b.setDenialReason(request.getReason().trim());
             cafeBookingRepository.save(b);
 
             return ResponseEntity.ok(toBookingRow(b));
@@ -378,6 +503,134 @@ public class OwnerServiceImpl implements OwnerService {
             }
 
             cafeOrderRepository.delete(o);
+            return ResponseEntity.ok("Deleted");
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<List<CafeAmenityRow>> listAmenities(String ownerUsername) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            List<CafeAmenity> list = cafeAmenityRepository.findByCafeIdOrderByCreatedAtDesc(cafe.getId());
+            List<CafeAmenityRow> rows = (list == null ? List.<CafeAmenityRow>of() : list.stream().filter(x -> x != null).map(this::toAmenityRow).toList());
+            return ResponseEntity.ok(rows);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<CafeAmenityRow> createAmenity(String ownerUsername, CafeAmenityRequest request) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            if (request == null || request.getName() == null || request.getName().isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            FunctionType ft = null;
+            if (request.getFunctionType() != null && !request.getFunctionType().isBlank()) {
+                try {
+                    ft = FunctionType.valueOf(request.getFunctionType().trim());
+                } catch (Exception ex) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+                }
+            }
+
+            CafeAmenity a = new CafeAmenity();
+            a.setCafe(cafe);
+            a.setFunctionType(ft);
+            a.setName(request.getName().trim());
+            a.setEnabled(request.getEnabled() == null ? true : request.getEnabled());
+            cafeAmenityRepository.save(a);
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(toAmenityRow(a));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<CafeAmenityRow> updateAmenity(String ownerUsername, Long id, CafeAmenityRequest request) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            if (id == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (request == null || request.getName() == null || request.getName().isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            CafeAmenity a = cafeAmenityRepository.findById(id).orElse(null);
+            if (a == null || a.getCafe() == null || a.getCafe().getId() == null || !a.getCafe().getId().equals(cafe.getId())) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            FunctionType ft = null;
+            if (request.getFunctionType() != null && !request.getFunctionType().isBlank()) {
+                try {
+                    ft = FunctionType.valueOf(request.getFunctionType().trim());
+                } catch (Exception ex) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+                }
+            }
+
+            a.setFunctionType(ft);
+            a.setName(request.getName().trim());
+            if (request.getEnabled() != null) {
+                a.setEnabled(request.getEnabled());
+            }
+            cafeAmenityRepository.save(a);
+
+            return ResponseEntity.ok(toAmenityRow(a));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<String> deleteAmenity(String ownerUsername, Long id) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            if (id == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            CafeAmenity a = cafeAmenityRepository.findById(id).orElse(null);
+            if (a == null || a.getCafe() == null || a.getCafe().getId() == null || !a.getCafe().getId().equals(cafe.getId())) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            cafeAmenityRepository.delete(a);
             return ResponseEntity.ok("Deleted");
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -605,6 +858,7 @@ public class OwnerServiceImpl implements OwnerService {
         r.setPaidAt(b.getPaidAt());
         r.setDenialReason(b.getDenialReason());
         r.setAmenityPreference(b.getAmenityPreference());
+        r.setFunctionType(b.getFunctionType() == null ? null : b.getFunctionType().name());
         r.setAllocatedTable(b.getAllocatedTable());
         r.setCreatedAt(b.getCreatedAt());
         return r;
@@ -661,6 +915,8 @@ public class OwnerServiceImpl implements OwnerService {
         r.setId(c.getId());
         r.setFunctionType(c.getFunctionType() == null ? null : c.getFunctionType().name());
         r.setTablesAvailable(c.getTablesAvailable());
+        r.setTableLabels(c.getTableLabels());
+        r.setSeatsPerTable(c.getSeatsPerTable());
         r.setSeatsAvailable(c.getSeatsAvailable());
         r.setPrice(c.getPrice());
         r.setEnabled(c.getEnabled());
@@ -675,6 +931,17 @@ public class OwnerServiceImpl implements OwnerService {
         r.setSize(img.getSize());
         r.setCover(img.getCover());
         r.setUrl("/api/public/cafe-images/" + img.getId());
+        return r;
+    }
+
+    private CafeAmenityRow toAmenityRow(CafeAmenity a) {
+        CafeAmenityRow r = new CafeAmenityRow();
+        r.setId(a.getId());
+        r.setCafeId(a.getCafe() == null ? null : a.getCafe().getId());
+        r.setFunctionType(a.getFunctionType() == null ? null : a.getFunctionType().name());
+        r.setName(a.getName());
+        r.setEnabled(a.getEnabled());
+        r.setCreatedAt(a.getCreatedAt());
         return r;
     }
 
@@ -1292,13 +1559,40 @@ public class OwnerServiceImpl implements OwnerService {
 
             Integer tables = request.getTablesAvailable();
             if (tables == null || tables < 0) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+                throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Tables available must be zero or positive");
+            }
+
+            Integer seatsPerTable = request.getSeatsPerTable();
+            if (seatsPerTable != null && seatsPerTable <= 0) {
+                throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Seats per table must be positive");
+            }
+
+            String labelsRaw = request.getTableLabels();
+            List<String> labels = new ArrayList<>();
+            if (labelsRaw != null && !labelsRaw.isBlank()) {
+                for (String part : labelsRaw.split(",")) {
+                    if (part == null) continue;
+                    String t = part.trim();
+                    if (t.isBlank()) continue;
+                    if (!labels.contains(t)) labels.add(t);
+                }
+            }
+            if (tables > 0) {
+                if (labels.size() != tables) {
+                    throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Table labels count must match tables available");
+                }
+            } else {
+                if (!labels.isEmpty()) {
+                    throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Table labels must be empty when tables available is 0");
+                }
             }
 
             FunctionCapacity cap = functionCapacityRepository.findByCafeIdAndFunctionType(cafe.getId(), ft).orElseGet(FunctionCapacity::new);
             cap.setCafe(cafe);
             cap.setFunctionType(ft);
             cap.setTablesAvailable(tables);
+            cap.setTableLabels(labels.isEmpty() ? null : String.join(", ", labels));
+            cap.setSeatsPerTable(seatsPerTable);
             cap.setSeatsAvailable(request.getSeatsAvailable());
             cap.setPrice(request.getPrice());
             cap.setEnabled(request.getEnabled() == null ? true : request.getEnabled());

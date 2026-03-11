@@ -1,8 +1,45 @@
 package com.cafe.service.impl;
 
-import com.cafe.dto.AdminDecisionRequest;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.cafe.dto.AdminAnalyticsDetailsResponse;
+import com.cafe.dto.AdminAnalyticsSummary;
+import com.cafe.dto.AdminCafeMetricRow;
 import com.cafe.dto.AdminCafeRow;
+import com.cafe.dto.AdminCityMetricRow;
+import com.cafe.dto.AdminDecisionRequest;
 import com.cafe.dto.AdminDocumentRow;
+import com.cafe.dto.AdminHourMetricRow;
+import com.cafe.dto.AdminItemMetricRow;
 import com.cafe.dto.AdminOwnerRow;
 import com.cafe.dto.AdminUserDetail;
 import com.cafe.dto.AdminUserRow;
@@ -10,58 +47,37 @@ import com.cafe.dto.CafeDocumentRow;
 import com.cafe.dto.CafeImageRow;
 import com.cafe.dto.CafeProfileRequest;
 import com.cafe.dto.CafeProfileResponse;
+import com.cafe.dto.MenuAvailabilityRequest;
+import com.cafe.dto.MenuItemRequest;
 import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.RegisterRequest;
-import com.cafe.entity.*;
-import com.cafe.repository.CafeRepository;
-import com.cafe.repository.CafeImageRepository;
+import com.cafe.entity.AcademicInfo;
+import com.cafe.entity.Address;
+import com.cafe.entity.ApprovalStatus;
+import com.cafe.entity.Cafe;
+import com.cafe.entity.CafeBooking;
+import com.cafe.entity.CafeDocument;
+import com.cafe.entity.CafeImage;
+import com.cafe.entity.CafeOrder;
+import com.cafe.entity.CafeOrderItem;
+import com.cafe.entity.Document;
+import com.cafe.entity.FunctionCapacity;
+import com.cafe.entity.MenuItem;
+import com.cafe.entity.PersonalDetails;
+import com.cafe.entity.Role;
+import com.cafe.entity.User;
+import com.cafe.entity.WorkExperience;
+import com.cafe.repository.CafeBookingRepository;
 import com.cafe.repository.CafeDocumentRepository;
+import com.cafe.repository.CafeImageRepository;
+import com.cafe.repository.CafeOrderRepository;
+import com.cafe.repository.CafeRepository;
 import com.cafe.repository.DocumentRepository;
 import com.cafe.repository.FunctionCapacityRepository;
-import com.cafe.repository.CafeOrderRepository;
-import com.cafe.repository.CafeBookingRepository;
 import com.cafe.repository.MenuItemRepository;
 import com.cafe.repository.UserRepository;
 import com.cafe.service.AdminService;
 import com.cafe.service.EmailService;
-import com.cafe.dto.AdminAnalyticsSummary;
-import com.cafe.dto.AdminAnalyticsDetailsResponse;
-import com.cafe.dto.AdminCafeMetricRow;
-import com.cafe.dto.AdminCityMetricRow;
-import com.cafe.dto.AdminHourMetricRow;
-import com.cafe.dto.AdminItemMetricRow;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Value;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-import java.io.IOException;
-import java.io.ByteArrayOutputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Map;
-
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-
-import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class AdminServiceImpl implements AdminService {
@@ -104,6 +120,9 @@ public class AdminServiceImpl implements AdminService {
     @Value("${cafe.images.dir:uploads/cafe-images}")
     private String cafeImagesDir;
 
+    @Value("${menu.images.dir:uploads/menu-images}")
+    private String menuImagesDir;
+
     @Override
     public ResponseEntity<List<AdminUserRow>> listUsers() {
         try {
@@ -137,6 +156,189 @@ public class AdminServiceImpl implements AdminService {
             return ResponseEntity.ok(rows);
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    private MenuItemRow toMenuRow(MenuItem mi) {
+        MenuItemRow r = new MenuItemRow();
+        r.setId(mi.getId());
+        r.setName(mi.getName());
+        r.setDescription(mi.getDescription());
+        r.setPrice(mi.getPrice());
+        r.setAvailable(mi.getAvailable());
+        r.setCategory(mi.getCategory());
+        if (mi.getImageFilePath() != null && !mi.getImageFilePath().isBlank()) {
+            r.setImageUrl("/api/public/menu-images/" + mi.getId());
+        }
+        return r;
+    }
+
+    @Override
+    public ResponseEntity<MenuItemRow> createCafeMenuItem(Long cafeId, MenuItemRequest request) {
+        try {
+            if (cafeId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (request == null || request.getName() == null || request.getName().isBlank() || request.getPrice() == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            MenuItem m = new MenuItem();
+            m.setCafe(cafe);
+            m.setName(request.getName().trim());
+            m.setDescription(request.getDescription());
+            m.setPrice(request.getPrice());
+            m.setAvailable(request.getAvailable() == null ? true : request.getAvailable());
+            m.setCategory(request.getCategory());
+            menuItemRepository.save(m);
+            return ResponseEntity.status(HttpStatus.CREATED).body(toMenuRow(m));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<MenuItemRow> updateCafeMenuItem(Long cafeId, Long menuItemId, MenuItemRequest request) {
+        try {
+            if (cafeId == null || menuItemId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (request == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            MenuItem m = menuItemRepository.findById(menuItemId).orElse(null);
+            if (m == null || m.getCafe() == null || !m.getCafe().getId().equals(cafeId)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            if (request.getName() != null && !request.getName().isBlank()) {
+                m.setName(request.getName().trim());
+            }
+            if (request.getDescription() != null) {
+                m.setDescription(request.getDescription());
+            }
+            if (request.getPrice() != null) {
+                m.setPrice(request.getPrice());
+            }
+            if (request.getAvailable() != null) {
+                m.setAvailable(request.getAvailable());
+            }
+            if (request.getCategory() != null) {
+                m.setCategory(request.getCategory());
+            }
+            menuItemRepository.save(m);
+            return ResponseEntity.ok(toMenuRow(m));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<MenuItemRow> updateCafeMenuItemAvailability(Long cafeId, Long menuItemId, MenuAvailabilityRequest request) {
+        try {
+            if (cafeId == null || menuItemId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (request == null || request.getAvailable() == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            MenuItem m = menuItemRepository.findById(menuItemId).orElse(null);
+            if (m == null || m.getCafe() == null || !m.getCafe().getId().equals(cafeId)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            m.setAvailable(request.getAvailable());
+            menuItemRepository.save(m);
+            return ResponseEntity.ok(toMenuRow(m));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<MenuItemRow> uploadCafeMenuItemImage(Long cafeId, Long menuItemId, MultipartFile file) {
+        try {
+            if (cafeId == null || menuItemId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (file == null || file.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            MenuItem m = menuItemRepository.findById(menuItemId).orElse(null);
+            if (m == null || m.getCafe() == null || !m.getCafe().getId().equals(cafeId)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            try {
+                if (m.getImageFilePath() != null && !m.getImageFilePath().isBlank()) {
+                    Files.deleteIfExists(Path.of(m.getImageFilePath()));
+                }
+            } catch (Exception ignored) {
+            }
+
+            Files.createDirectories(Path.of(menuImagesDir));
+
+            String orig = file.getOriginalFilename() == null ? "image" : file.getOriginalFilename();
+            String safe = orig.replaceAll("[^a-zA-Z0-9._-]", "_");
+            String storedName = UUID.randomUUID() + "_" + safe;
+            Path target = Path.of(menuImagesDir).resolve(storedName);
+            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+
+            m.setImageFilename(orig);
+            m.setImageContentType(file.getContentType() == null ? "application/octet-stream" : file.getContentType());
+            m.setImageFilePath(target.toAbsolutePath().toString());
+            m.setImageSize(file.getSize());
+            menuItemRepository.save(m);
+
+            return ResponseEntity.ok(toMenuRow(m));
+        } catch (Exception ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<String> deleteCafeMenuItem(Long cafeId, Long menuItemId) {
+        try {
+            if (cafeId == null || menuItemId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Bad request");
+            }
+            Cafe cafe = cafeRepository.findById(cafeId).orElse(null);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Cafe not found");
+            }
+
+            MenuItem m = menuItemRepository.findById(menuItemId).orElse(null);
+            if (m == null || m.getCafe() == null || !m.getCafe().getId().equals(cafeId)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Not found");
+            }
+
+            try {
+                if (m.getImageFilePath() != null && !m.getImageFilePath().isBlank()) {
+                    Files.deleteIfExists(Path.of(m.getImageFilePath()));
+                }
+            } catch (Exception ignored) {
+            }
+            menuItemRepository.deleteById(menuItemId);
+            return ResponseEntity.ok("Deleted");
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to delete");
         }
     }
 

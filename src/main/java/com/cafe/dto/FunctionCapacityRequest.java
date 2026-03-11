@@ -27,4 +27,8 @@ public class FunctionCapacityRequest {
 
     @NotNull(message = "Enabled status is required")
     private Boolean enabled;
+
+    private String tableLabels;
+
+    private Integer seatsPerTable;
 }

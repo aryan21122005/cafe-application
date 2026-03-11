@@ -7,7 +7,9 @@ import {
   approveCafeAdmin,
   createCafeForOwner,
   createOwner,
+  createCafeMenuItemAdmin,
   deleteCafeImageAdmin,
+  deleteCafeMenuItemAdmin,
   denyUser,
   deleteUser,
   getCafeDetailAdmin,
@@ -21,7 +23,9 @@ import {
   listCafes,
   listOwners,
   listUsers,
+  updateCafeMenuAvailabilityAdmin,
   updateCafeProfileAdmin,
+  uploadCafeMenuItemImageAdmin,
   uploadCafeImageAdmin
 } from '../../lib/api.js'
 
@@ -112,6 +116,15 @@ export default function AdminDashboard() {
   const [uploadCafeImgFile, setUploadCafeImgFile] = useState(null)
   const [uploadCafeImgCover, setUploadCafeImgCover] = useState(false)
 
+  const [menuBusy, setMenuBusy] = useState(false)
+  const [menuErr, setMenuErr] = useState('')
+  const [newMenuName, setNewMenuName] = useState('')
+  const [newMenuCategory, setNewMenuCategory] = useState('')
+  const [newMenuPrice, setNewMenuPrice] = useState('')
+  const [newMenuDescription, setNewMenuDescription] = useState('')
+  const [newMenuAvailable, setNewMenuAvailable] = useState(true)
+  const [newMenuImageFile, setNewMenuImageFile] = useState(null)
+
   const [analyticsSummary, setAnalyticsSummary] = useState(null)
   const [analyticsDetails, setAnalyticsDetails] = useState(null)
 
@@ -147,6 +160,18 @@ export default function AdminDashboard() {
       reasonForLeaving: ''
     }
   ])
+
+  async function refreshCafeMenu() {
+    if (selectedCafeId == null) return
+    setMenuErr('')
+    try {
+      const menu = await listCafeMenu(selectedCafeId)
+      setCafeMenu(Array.isArray(menu) ? menu : [])
+    } catch (e) {
+      const msg = e?.response?.data
+      setMenuErr(typeof msg === 'string' ? msg : 'Failed to load menu')
+    }
+  }
 
   function downloadBlob(blob, filename) {
     const url = window.URL.createObjectURL(blob)
@@ -2219,6 +2244,91 @@ export default function AdminDashboard() {
                 {!cafeDetailLoading ? (
                   <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="text-sm font-semibold">Menu</div>
+
+                    {menuErr ? <div className="mt-3 text-sm text-red-700">{menuErr}</div> : null}
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-3">
+                      <input
+                        className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                        placeholder="Item name *"
+                        value={newMenuName}
+                        onChange={(e) => setNewMenuName(e.target.value)}
+                      />
+                      <input
+                        className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                        placeholder="Category *"
+                        value={newMenuCategory}
+                        onChange={(e) => setNewMenuCategory(e.target.value)}
+                      />
+                      <input
+                        className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                        placeholder="Price *"
+                        value={newMenuPrice}
+                        onChange={(e) => setNewMenuPrice(e.target.value)}
+                      />
+                      <input
+                        className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm md:col-span-2"
+                        placeholder="Description *"
+                        value={newMenuDescription}
+                        onChange={(e) => setNewMenuDescription(e.target.value)}
+                      />
+                      <select
+                        className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                        value={String(!!newMenuAvailable)}
+                        onChange={(e) => setNewMenuAvailable(e.target.value === 'true')}
+                      >
+                        <option value="true">Available: Yes</option>
+                        <option value="false">Available: No</option>
+                      </select>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm md:col-span-2"
+                        onChange={(e) => setNewMenuImageFile(e.target.files?.[0] || null)}
+                      />
+                      <button
+                        type="button"
+                        className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+                        disabled={menuBusy}
+                        onClick={async () => {
+                          if (selectedCafeId == null) return
+                          setMenuErr('')
+                          const price = Number(newMenuPrice)
+                          if (!newMenuName.trim() || !newMenuCategory.trim() || !newMenuDescription.trim() || !Number.isFinite(price) || price <= 0) {
+                            setMenuErr('Please fill name, category, description, and a valid price')
+                            return
+                          }
+                          setMenuBusy(true)
+                          try {
+                            const created = await createCafeMenuItemAdmin(selectedCafeId, {
+                              name: newMenuName.trim(),
+                              category: newMenuCategory.trim(),
+                              description: newMenuDescription.trim(),
+                              price,
+                              available: !!newMenuAvailable
+                            })
+                            if (newMenuImageFile && created?.id) {
+                              await uploadCafeMenuItemImageAdmin(selectedCafeId, created.id, newMenuImageFile)
+                            }
+                            setNewMenuName('')
+                            setNewMenuCategory('')
+                            setNewMenuDescription('')
+                            setNewMenuPrice('')
+                            setNewMenuAvailable(true)
+                            setNewMenuImageFile(null)
+                            await refreshCafeMenu()
+                          } catch (e) {
+                            const msg = e?.response?.data
+                            setMenuErr(typeof msg === 'string' ? msg : 'Failed to create menu item')
+                          } finally {
+                            setMenuBusy(false)
+                          }
+                        }}
+                      >
+                        Add item
+                      </button>
+                    </div>
+
                     {Array.isArray(cafeMenu) && cafeMenu.length > 0 ? (
                       <div className="mt-3 overflow-x-auto">
                         <table className="w-full min-w-[620px] text-left text-sm">
@@ -2228,6 +2338,7 @@ export default function AdminDashboard() {
                               <th className="px-3 py-2">Category</th>
                               <th className="px-3 py-2">Price</th>
                               <th className="px-3 py-2">Available</th>
+                              <th className="px-3 py-2">Actions</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-200">
@@ -2239,7 +2350,82 @@ export default function AdminDashboard() {
                                 </td>
                                 <td className="px-3 py-2 text-slate-700">{mi.category || '-'}</td>
                                 <td className="px-3 py-2 text-slate-700">₹{mi.price ?? 0}</td>
-                                <td className="px-3 py-2 text-slate-700">{String(!!mi.available)}</td>
+                                <td className="px-3 py-2 text-slate-700">
+                                  <button
+                                    type="button"
+                                    className={
+                                      mi.available
+                                        ? 'rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800'
+                                        : 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700'
+                                    }
+                                    disabled={menuBusy}
+                                    onClick={async () => {
+                                      if (selectedCafeId == null) return
+                                      setMenuErr('')
+                                      setMenuBusy(true)
+                                      try {
+                                        await updateCafeMenuAvailabilityAdmin(selectedCafeId, mi.id, !mi.available)
+                                        await refreshCafeMenu()
+                                      } catch (e) {
+                                        const msg = e?.response?.data
+                                        setMenuErr(typeof msg === 'string' ? msg : 'Failed to update availability')
+                                      } finally {
+                                        setMenuBusy(false)
+                                      }
+                                    }}
+                                  >
+                                    {mi.available ? 'Available' : 'Unavailable'}
+                                  </button>
+                                </td>
+                                <td className="px-3 py-2 text-slate-700">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <label className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={async (e) => {
+                                          const f = e.target.files?.[0] || null
+                                          if (!f || selectedCafeId == null) return
+                                          setMenuErr('')
+                                          setMenuBusy(true)
+                                          try {
+                                            await uploadCafeMenuItemImageAdmin(selectedCafeId, mi.id, f)
+                                            await refreshCafeMenu()
+                                          } catch (err) {
+                                            const msg = err?.response?.data
+                                            setMenuErr(typeof msg === 'string' ? msg : 'Failed to upload image')
+                                          } finally {
+                                            setMenuBusy(false)
+                                          }
+                                        }}
+                                      />
+                                      Upload image
+                                    </label>
+                                    <button
+                                      type="button"
+                                      className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60"
+                                      disabled={menuBusy}
+                                      onClick={async () => {
+                                        if (selectedCafeId == null) return
+                                        if (!window.confirm('Delete this menu item?')) return
+                                        setMenuErr('')
+                                        setMenuBusy(true)
+                                        try {
+                                          await deleteCafeMenuItemAdmin(selectedCafeId, mi.id)
+                                          await refreshCafeMenu()
+                                        } catch (e) {
+                                          const msg = e?.response?.data
+                                          setMenuErr(typeof msg === 'string' ? msg : 'Failed to delete menu item')
+                                        } finally {
+                                          setMenuBusy(false)
+                                        }
+                                      }}
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                </td>
                               </tr>
                             ))}
                           </tbody>

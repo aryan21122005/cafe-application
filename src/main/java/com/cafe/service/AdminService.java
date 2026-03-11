@@ -1,22 +1,25 @@
 package com.cafe.service;
 
-import com.cafe.dto.AdminDecisionRequest;
-import com.cafe.dto.AdminCafeRow;
-import com.cafe.dto.AdminUserDetail;
-import com.cafe.dto.AdminUserRow;
-import com.cafe.dto.CafeProfileResponse;
-import com.cafe.dto.RegisterRequest;
-import com.cafe.dto.CafeProfileRequest;
-import com.cafe.dto.AdminOwnerRow;
-import com.cafe.dto.MenuItemRow;
-import com.cafe.dto.CafeDocumentRow;
-import com.cafe.dto.AdminAnalyticsSummary;
-import com.cafe.dto.AdminAnalyticsDetailsResponse;
-import com.cafe.dto.CafeImageRow;
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
+import com.cafe.dto.AdminAnalyticsDetailsResponse;
+import com.cafe.dto.AdminAnalyticsSummary;
+import com.cafe.dto.AdminCafeRow;
+import com.cafe.dto.AdminDecisionRequest;
+import com.cafe.dto.AdminOwnerRow;
+import com.cafe.dto.AdminUserDetail;
+import com.cafe.dto.AdminUserRow;
+import com.cafe.dto.CafeDocumentRow;
+import com.cafe.dto.CafeImageRow;
+import com.cafe.dto.CafeProfileRequest;
+import com.cafe.dto.CafeProfileResponse;
+import com.cafe.dto.MenuAvailabilityRequest;
+import com.cafe.dto.MenuItemRequest;
+import com.cafe.dto.MenuItemRow;
+import com.cafe.dto.RegisterRequest;
 
 public interface AdminService {
 
@@ -37,6 +40,16 @@ public interface AdminService {
     ResponseEntity<AdminCafeRow> approveCafe(Long cafeId);
 
     ResponseEntity<List<MenuItemRow>> listCafeMenu(Long cafeId);
+
+    ResponseEntity<MenuItemRow> createCafeMenuItem(Long cafeId, MenuItemRequest request);
+
+    ResponseEntity<MenuItemRow> updateCafeMenuItem(Long cafeId, Long menuItemId, MenuItemRequest request);
+
+    ResponseEntity<MenuItemRow> updateCafeMenuItemAvailability(Long cafeId, Long menuItemId, MenuAvailabilityRequest request);
+
+    ResponseEntity<MenuItemRow> uploadCafeMenuItemImage(Long cafeId, Long menuItemId, MultipartFile file);
+
+    ResponseEntity<String> deleteCafeMenuItem(Long cafeId, Long menuItemId);
 
     ResponseEntity<String> deleteCafe(Long cafeId);
 

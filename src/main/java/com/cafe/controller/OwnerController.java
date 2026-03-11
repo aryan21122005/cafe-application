@@ -1,29 +1,43 @@
 package com.cafe.controller;
 
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.cafe.dto.AdminUserDetail;
+import com.cafe.dto.BookingDecisionRequest;
+import com.cafe.dto.CafeAmenityRequest;
+import com.cafe.dto.CafeAmenityRow;
+import com.cafe.dto.CafeBookingRow;
+import com.cafe.dto.CafeDocumentRow;
+import com.cafe.dto.CafeImageRow;
+import com.cafe.dto.CafeOrderRow;
 import com.cafe.dto.CafeProfileRequest;
 import com.cafe.dto.CafeProfileResponse;
-import com.cafe.dto.AdminUserDetail;
-import com.cafe.dto.CafeImageRow;
 import com.cafe.dto.FunctionCapacityRequest;
 import com.cafe.dto.FunctionCapacityRow;
+import com.cafe.dto.MenuAvailabilityRequest;
 import com.cafe.dto.MenuItemRequest;
 import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.OwnerStaffCreateRequest;
 import com.cafe.dto.OwnerStaffRow;
-import com.cafe.dto.MenuAvailabilityRequest;
-import com.cafe.dto.CafeDocumentRow;
-import com.cafe.dto.CafeBookingRow;
-import com.cafe.dto.CafeOrderRow;
-import com.cafe.dto.BookingDecisionRequest;
 import com.cafe.service.OwnerService;
-import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/owner")
@@ -248,6 +262,15 @@ public class OwnerController {
         return ownerService.denyBooking(ownerUsername, id, request);
     }
 
+    @PostMapping("/bookings/{id}/deny-refund")
+    public ResponseEntity<CafeBookingRow> denyBookingWithRefund(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
+            @PathVariable Long id,
+            @Valid @RequestBody BookingDecisionRequest request
+    ) {
+        return ownerService.denyBookingWithRefund(ownerUsername, id, request);
+    }
+
     @DeleteMapping("/bookings/{id}")
     public ResponseEntity<String> deleteBooking(
             @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
@@ -269,5 +292,37 @@ public class OwnerController {
             @PathVariable Long id
     ) {
         return ownerService.deleteOrder(ownerUsername, id);
+    }
+
+    @GetMapping("/amenities")
+    public ResponseEntity<List<CafeAmenityRow>> listAmenities(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername
+    ) {
+        return ownerService.listAmenities(ownerUsername);
+    }
+
+    @PostMapping("/amenities")
+    public ResponseEntity<CafeAmenityRow> createAmenity(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
+            @Valid @RequestBody CafeAmenityRequest request
+    ) {
+        return ownerService.createAmenity(ownerUsername, request);
+    }
+
+    @PutMapping("/amenities/{id}")
+    public ResponseEntity<CafeAmenityRow> updateAmenity(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
+            @PathVariable Long id,
+            @Valid @RequestBody CafeAmenityRequest request
+    ) {
+        return ownerService.updateAmenity(ownerUsername, id, request);
+    }
+
+    @DeleteMapping("/amenities/{id}")
+    public ResponseEntity<String> deleteAmenity(
+            @RequestHeader(value = "X-USERNAME", required = false) String ownerUsername,
+            @PathVariable Long id
+    ) {
+        return ownerService.deleteAmenity(ownerUsername, id);
     }
 }

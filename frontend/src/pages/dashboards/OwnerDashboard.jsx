@@ -3,19 +3,22 @@ import { useLocation } from 'react-router-dom'
 import { clearSession, getSession } from '../../lib/auth.js'
 import ProfilePage from './ProfilePage.jsx'
 import {
-  api,
+  approveOwnerBooking,
   approveCafeAdmin,
   createOwnerStaff,
   createOwnerMenuItem,
   deleteOwnerCapacity,
+  listOwnerAmenities,
+  createOwnerAmenity,
+  updateOwnerAmenity,
+  deleteOwnerAmenity,
   deleteOwnerCafe,
   deleteOwnerStaff,
   deleteOwnerImage,
-  deleteOwnerMenuItem,
-  deleteOwnerOrder,
-  approveOwnerBooking,
   deleteOwnerBooking,
+  denyOwnerBookingWithRefund,
   denyOwnerBooking,
+  deleteOwnerOrder,
   getOwnerCafe,
   getOwnerMe,
   listOwnerBookings,
@@ -43,9 +46,9 @@ function TrashIcon({ className }) {
   )
 }
 
-function Field({ label, children }) {
+function Field({ label, children, className }) {
   return (
-    <label className="grid gap-1">
+    <label className={`grid gap-1 ${className || ''}`.trim()}>
       <div className="text-xs font-semibold text-slate-600">{label}</div>
       {children}
     </label>
@@ -441,9 +444,24 @@ export default function OwnerDashboard() {
 
   const [capType, setCapType] = useState('DINE_IN')
   const [capTables, setCapTables] = useState('')
+  const [capTableLabels, setCapTableLabels] = useState('')
+  const [capSeatsPerTable, setCapSeatsPerTable] = useState('')
   const [capSeats, setCapSeats] = useState('')
   const [capPrice, setCapPrice] = useState('')
   const [capEnabled, setCapEnabled] = useState(true)
+
+  const [amenities, setAmenities] = useState([])
+  const [amenityLoading, setAmenityLoading] = useState(false)
+  const [amenityMsg, setAmenityMsg] = useState('')
+  const [amenityErr, setAmenityErr] = useState('')
+  const [amenityName, setAmenityName] = useState('')
+  const [amenityFunctionType, setAmenityFunctionType] = useState('')
+  const [amenityEnabled, setAmenityEnabled] = useState(true)
+
+  useEffect(() => {
+    if (tab !== 'capacities') return
+    refreshAmenities()
+  }, [tab])
 
   const [images, setImages] = useState([])
   const [imgLoading, setImgLoading] = useState(false)
@@ -462,6 +480,7 @@ export default function OwnerDashboard() {
   const [denyBookingId, setDenyBookingId] = useState(null)
   const [denyReason, setDenyReason] = useState('')
   const [denyBusy, setDenyBusy] = useState(false)
+  const [denyRefund, setDenyRefund] = useState(false)
 
   const [orders, setOrders] = useState([])
   const [ordersLoading, setOrdersLoading] = useState(false)
@@ -576,7 +595,7 @@ export default function OwnerDashboard() {
     if (!q) return list
 
     return list.filter((c) => {
-      const hay = [c?.id, c?.functionType, c?.tablesAvailable, c?.seatsAvailable, c?.price, c?.enabled]
+      const hay = [c?.id, c?.functionType, c?.tablesAvailable, c?.tableLabels, c?.seatsAvailable, c?.price, c?.enabled]
         .filter((v) => v !== null && v !== undefined)
         .map((v) => String(v).toLowerCase())
         .join(' | ')
@@ -799,6 +818,21 @@ export default function OwnerDashboard() {
     }
   }
 
+  async function refreshAmenities() {
+    setAmenityErr('')
+    setAmenityMsg('')
+    setAmenityLoading(true)
+    try {
+      const res = await listOwnerAmenities(ownerUsername)
+      setAmenities(Array.isArray(res) ? res : [])
+    } catch (e) {
+      const msg = e?.response?.data
+      setAmenityErr(typeof msg === 'string' ? msg : 'Failed to load amenities')
+    } finally {
+      setAmenityLoading(false)
+    }
+  }
+
   async function refreshImages() {
     setImgErr('')
     setImgMsg('')
@@ -954,7 +988,7 @@ export default function OwnerDashboard() {
 
         {!bookingsLoading ? (
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-sm">
+            <table className="w-full min-w-[980px] text-left text-sm">
               <thead className="text-xs font-semibold uppercase text-slate-500">
                 <tr>
                   <th className="px-3 py-2">Customer</th>
@@ -963,6 +997,7 @@ export default function OwnerDashboard() {
                   <th className="px-3 py-2">Time</th>
                   <th className="px-3 py-2">Guests</th>
                   <th className="px-3 py-2">Preference</th>
+                  <th className="px-3 py-2">Function</th>
                   <th className="px-3 py-2">Allocated</th>
                   <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2">Payment</th>
@@ -982,6 +1017,7 @@ export default function OwnerDashboard() {
                       <td className="px-3 py-2 text-slate-700">{b.bookingTime || '-'}</td>
                       <td className="px-3 py-2 text-slate-700">{b.guests ?? '-'}</td>
                       <td className="px-3 py-2 text-slate-700">{b.amenityPreference || '-'}</td>
+                      <td className="px-3 py-2 text-slate-700">{b.functionType || '-'}</td>
                       <td className="px-3 py-2 text-slate-700">{b.allocatedTable || '-'}</td>
                       <td className="px-3 py-2 text-slate-700">{b.status || 'PENDING'}</td>
                       <td className="px-3 py-2 text-slate-700">{b.paymentStatus || 'UNPAID'}</td>
@@ -993,7 +1029,7 @@ export default function OwnerDashboard() {
                           <button
                             type="button"
                             className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
-                            disabled={String(b.status || '').toUpperCase() === 'APPROVED'}
+                            disabled={['APPROVED', 'DENIED_WITH_REFUND'].includes(String(b.status || '').toUpperCase())}
                             onClick={async () => {
                               setBookingsErr('')
                               try {
@@ -1010,14 +1046,29 @@ export default function OwnerDashboard() {
                           <button
                             type="button"
                             className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-500/15 disabled:opacity-60"
-                            disabled={String(b.status || '').toUpperCase() === 'DENIED'}
+                            disabled={['APPROVED', 'DENIED', 'DENIED_WITH_REFUND'].includes(String(b.status || '').toUpperCase())}
                             onClick={() => {
                               setDenyBookingId(b.id)
                               setDenyReason('')
+                              setDenyRefund(false)
                               setDenyOpen(true)
                             }}
                           >
                             Deny
+                          </button>
+
+                          <button
+                            type="button"
+                            className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-500/15 disabled:opacity-60"
+                            disabled={['APPROVED', 'DENIED_WITH_REFUND'].includes(String(b.status || '').toUpperCase())}
+                            onClick={() => {
+                              setDenyBookingId(b.id)
+                              setDenyReason('')
+                              setDenyRefund(true)
+                              setDenyOpen(true)
+                            }}
+                          >
+                            Deny + Refund
                           </button>
                           <button
                             type="button"
@@ -1039,7 +1090,7 @@ export default function OwnerDashboard() {
                             <TrashIcon className="h-4 w-4" />
                           </button>
                         </div>
-                        {String(b.status || '').toUpperCase() === 'DENIED' && b.denialReason ? (
+                        {['DENIED', 'DENIED_WITH_REFUND'].includes(String(b.status || '').toUpperCase()) && b.denialReason ? (
                           <div className="mt-2 text-xs text-red-700">Reason: {b.denialReason}</div>
                         ) : null}
                       </td>
@@ -1047,7 +1098,7 @@ export default function OwnerDashboard() {
                   ))
                 ) : (
                   <tr>
-                    <td className="px-3 py-4 text-slate-600" colSpan={13}>
+                    <td className="px-3 py-4 text-slate-600" colSpan={14}>
                       No bookings yet.
                     </td>
                   </tr>
@@ -1090,8 +1141,8 @@ export default function OwnerDashboard() {
         {denyOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-lg rounded-2xl border border-black/10 bg-white p-5">
-              <div className="text-sm font-extrabold">Deny booking</div>
-              <div className="mt-1 text-xs text-slate-600">Please provide a reason. This will be shown to the customer.</div>
+              <div className="text-sm font-extrabold">{denyRefund ? 'Deny booking with refund' : 'Deny booking'}</div>
+              <div className="mt-1 text-xs text-slate-600">Please provide a message. This will be shown to the customer.</div>
 
               <div className="mt-4 grid gap-2">
                 <div className="text-xs font-semibold text-slate-600">Reason *</div>
@@ -1112,6 +1163,7 @@ export default function OwnerDashboard() {
                     setDenyOpen(false)
                     setDenyBookingId(null)
                     setDenyReason('')
+                    setDenyRefund(false)
                   }}
                 >
                   Cancel
@@ -1124,10 +1176,15 @@ export default function OwnerDashboard() {
                     setBookingsErr('')
                     setDenyBusy(true)
                     try {
-                      await denyOwnerBooking(ownerUsername, denyBookingId, { reason: denyReason })
+                      if (denyRefund) {
+                        await denyOwnerBookingWithRefund(ownerUsername, denyBookingId, { reason: denyReason })
+                      } else {
+                        await denyOwnerBooking(ownerUsername, denyBookingId, { reason: denyReason })
+                      }
                       setDenyOpen(false)
                       setDenyBookingId(null)
                       setDenyReason('')
+                      setDenyRefund(false)
                       await refreshBookings()
                     } catch (e) {
                       const msg = e?.response?.data
@@ -1137,7 +1194,7 @@ export default function OwnerDashboard() {
                     }
                   }}
                 >
-                  Deny booking
+                  {denyRefund ? 'Deny + Refund' : 'Deny booking'}
                 </button>
               </div>
             </div>
@@ -1403,10 +1460,15 @@ export default function OwnerDashboard() {
     setCapErr('')
     setCapMsg('')
     const tablesNum = Number(capTables)
+    const seatsPerTableNum = capSeatsPerTable === '' ? null : Number(capSeatsPerTable)
     const seatsNum = capSeats === '' ? null : Number(capSeats)
     const priceNum = capPrice === '' ? null : Number(capPrice)
     if (!Number.isFinite(tablesNum) || tablesNum < 0) {
       setCapErr('Tables must be a valid number')
+      return
+    }
+    if (seatsPerTableNum != null && (!Number.isFinite(seatsPerTableNum) || seatsPerTableNum <= 0)) {
+      setCapErr('Seats per table must be a valid number greater than 0')
       return
     }
     if (seatsNum != null && !Number.isFinite(seatsNum)) {
@@ -1422,6 +1484,8 @@ export default function OwnerDashboard() {
       await upsertOwnerCapacity(ownerUsername, {
         functionType: capType,
         tablesAvailable: tablesNum,
+        tableLabels: String(capTableLabels || '').trim() || null,
+        seatsPerTable: seatsPerTableNum,
         seatsAvailable: seatsNum,
         price: priceNum,
         enabled: !!capEnabled
@@ -2108,6 +2172,40 @@ export default function OwnerDashboard() {
                 placeholder="10"
               />
             </Field>
+            <Field label="Seats per table" className="md:col-span-1">
+              <input
+                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                value={capSeatsPerTable}
+                onChange={(e) => setCapSeatsPerTable(e.target.value)}
+                placeholder="4"
+              />
+            </Field>
+            <Field label="Table labels" className="md:col-span-3">
+              <div className="flex gap-2">
+                <input
+                  className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                  value={capTableLabels}
+                  onChange={(e) => setCapTableLabels(e.target.value)}
+                  placeholder="Generate or enter labels"
+                />
+                <button
+                  type="button"
+                  className="whitespace-nowrap rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white disabled:opacity-60"
+                  disabled={capLoading}
+                  onClick={() => {
+                    const n = Number(capTables) || 0
+                    if (n <= 0) {
+                      setCapErr('Tables available must be greater than 0 to generate labels')
+                      return
+                    }
+                    const labels = Array.from({ length: n }, (_, i) => `T${i + 1}`).join(', ')
+                    setCapTableLabels(labels)
+                  }}
+                >
+                  Generate
+                </button>
+              </div>
+            </Field>
             <Field label="Seats available">
               <input
                 className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
@@ -2134,6 +2232,180 @@ export default function OwnerDashboard() {
                 <option value="false">No</option>
               </select>
             </Field>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold">Amenities</div>
+              <div className="mt-1 text-xs text-slate-600">Create amenities customers can select during booking/order.</div>
+            </div>
+            <button
+              type="button"
+              className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm"
+              onClick={() => refreshAmenities()}
+              disabled={amenityLoading}
+            >
+              Refresh
+            </button>
+          </div>
+
+          {amenityErr ? <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{amenityErr}</div> : null}
+          {amenityMsg ? <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{amenityMsg}</div> : null}
+
+          <div className="mt-5 grid gap-4 md:grid-cols-5">
+            <Field label="Name *" className="md:col-span-2">
+              <input
+                className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                value={amenityName}
+                onChange={(e) => setAmenityName(e.target.value)}
+                placeholder="e.g. Window"
+              />
+            </Field>
+            <Field label="Function type (optional)">
+              <select
+                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                value={amenityFunctionType}
+                onChange={(e) => setAmenityFunctionType(e.target.value)}
+              >
+                <option value="">All</option>
+                <option value="DINE_IN">DINE_IN</option>
+                <option value="BIRTHDAY">BIRTHDAY</option>
+                <option value="CORPORATE">CORPORATE</option>
+              </select>
+            </Field>
+            <Field label="Enabled">
+              <select
+                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
+                value={String(amenityEnabled)}
+                onChange={(e) => setAmenityEnabled(e.target.value === 'true')}
+              >
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </Field>
+            <div className="flex items-end">
+              <button
+                type="button"
+                className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+                disabled={amenityLoading}
+                onClick={async () => {
+                  setAmenityErr('')
+                  setAmenityMsg('')
+                  const name = String(amenityName || '').trim()
+                  if (!name) {
+                    setAmenityErr('Amenity name is required')
+                    return
+                  }
+                  setAmenityLoading(true)
+                  try {
+                    await createOwnerAmenity(ownerUsername, {
+                      name,
+                      functionType: amenityFunctionType || null,
+                      enabled: !!amenityEnabled
+                    })
+                    setAmenityName('')
+                    setAmenityFunctionType('')
+                    setAmenityEnabled(true)
+                    setAmenityMsg('Created')
+                    await refreshAmenities()
+                  } catch (e) {
+                    const msg = e?.response?.data
+                    setAmenityErr(typeof msg === 'string' ? msg : 'Failed to create amenity')
+                  } finally {
+                    setAmenityLoading(false)
+                  }
+                }}
+              >
+                Add
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5 overflow-x-auto rounded-2xl border border-black/10 bg-white/70">
+            <table className="w-full min-w-[900px] text-left text-sm">
+              <thead className="bg-white/70 text-xs font-semibold uppercase text-slate-500">
+                <tr>
+                  <th className="px-5 py-3">Name</th>
+                  <th className="px-5 py-3">Function</th>
+                  <th className="px-5 py-3">Enabled</th>
+                  <th className="px-5 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black/5">
+                {(Array.isArray(amenities) ? amenities : []).length === 0 ? (
+                  <tr>
+                    <td className="px-5 py-6 text-slate-600" colSpan={4}>
+                      No amenities yet.
+                    </td>
+                  </tr>
+                ) : (
+                  (Array.isArray(amenities) ? amenities : []).map((a) => (
+                    <tr key={a.id} className="hover:bg-black/5">
+                      <td className="px-5 py-3 font-semibold text-slate-900">{a.name}</td>
+                      <td className="px-5 py-3 text-slate-600">{a.functionType || 'All'}</td>
+                      <td className="px-5 py-3">
+                        <button
+                          type="button"
+                          className={
+                            a.enabled
+                              ? 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-500/15 disabled:opacity-60'
+                              : 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60'
+                          }
+                          disabled={amenityLoading}
+                          onClick={async () => {
+                            setAmenityErr('')
+                            setAmenityMsg('')
+                            setAmenityLoading(true)
+                            try {
+                              await updateOwnerAmenity(ownerUsername, a.id, {
+                                name: a.name,
+                                functionType: a.functionType || null,
+                                enabled: !a.enabled
+                              })
+                              await refreshAmenities()
+                            } catch (e) {
+                              const msg = e?.response?.data
+                              setAmenityErr(typeof msg === 'string' ? msg : 'Failed to update amenity')
+                            } finally {
+                              setAmenityLoading(false)
+                            }
+                          }}
+                        >
+                          {a.enabled ? 'Enabled' : 'Disabled'}
+                        </button>
+                      </td>
+                      <td className="px-5 py-3">
+                        <button
+                          type="button"
+                          className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/15 disabled:opacity-60"
+                          disabled={amenityLoading}
+                          onClick={async () => {
+                            if (!window.confirm('Delete this amenity?')) return
+                            setAmenityErr('')
+                            setAmenityMsg('')
+                            setAmenityLoading(true)
+                            try {
+                              await deleteOwnerAmenity(ownerUsername, a.id)
+                              setAmenityMsg('Deleted')
+                              await refreshAmenities()
+                            } catch (e) {
+                              const msg = e?.response?.data
+                              setAmenityErr(typeof msg === 'string' ? msg : 'Failed to delete amenity')
+                            } finally {
+                              setAmenityLoading(false)
+                            }
+                          }}
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -2170,7 +2442,7 @@ export default function OwnerDashboard() {
                       setCapPage(1)
                     }}
                     className="w-56 rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
-                    placeholder="function / tables"
+                    placeholder="function / tables / labels"
                   />
                 </div>
               </div>
@@ -2182,6 +2454,8 @@ export default function OwnerDashboard() {
                 <tr>
                   <th className="px-5 py-3">Function</th>
                   <th className="px-5 py-3">Tables</th>
+                  <th className="px-5 py-3">Labels</th>
+                  <th className="px-5 py-3">Seats/Table</th>
                   <th className="px-5 py-3">Seats</th>
                   <th className="px-5 py-3">Price</th>
                   <th className="px-5 py-3">Enabled</th>
@@ -2191,7 +2465,7 @@ export default function OwnerDashboard() {
               <tbody className="divide-y divide-black/5">
                 {filteredCaps.length === 0 ? (
                   <tr>
-                    <td className="px-5 py-6 text-slate-600" colSpan={6}>
+                    <td className="px-5 py-6 text-slate-600" colSpan={8}>
                       No capacities yet.
                     </td>
                   </tr>
@@ -2200,6 +2474,8 @@ export default function OwnerDashboard() {
                     <tr key={c.id} className="hover:bg-black/5">
                       <td className="px-5 py-3 font-semibold text-slate-900">{c.functionType}</td>
                       <td className="px-5 py-3 text-slate-900">{c.tablesAvailable}</td>
+                      <td className="px-5 py-3 text-slate-600">{c.tableLabels || '-'}</td>
+                      <td className="px-5 py-3 text-slate-600">{c.seatsPerTable ?? '-'}</td>
                       <td className="px-5 py-3 text-slate-600">{c.seatsAvailable ?? '-'}</td>
                       <td className="px-5 py-3 text-slate-600">{c.price ?? '-'}</td>
                       <td className="px-5 py-3 text-slate-600">{c.enabled ? 'Yes' : 'No'}</td>

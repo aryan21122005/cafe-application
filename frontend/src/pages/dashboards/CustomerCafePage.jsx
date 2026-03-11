@@ -1,11 +1,34 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
-import { confirmRazorpayCustomerCartOrder, createCustomerBooking, createCustomerOrder, createRazorpayOrderForCustomerBooking, createRazorpayOrderForCustomerCart, getPublicCafeDetail, listPublicCafeImages, listPublicCafeMenu, verifyRazorpayPaymentForCustomerBooking } from '../../lib/api.js'
+import {
+  confirmRazorpayCustomerBookingFoodOrder,
+  confirmRazorpayCustomerCartOrder,
+  createCustomerBooking,
+  createCustomerOrder,
+  createRazorpayOrderForCustomerBooking,
+  createRazorpayOrderForCustomerBookingFood,
+  createRazorpayOrderForCustomerCart,
+  getMyProfile,
+  getPublicCafeDetail,
+  getPublicAvailableTables,
+  listPublicCafeImages,
+  listPublicCafeAmenities,
+  listPublicCafeMenu,
+  verifyRazorpayPaymentForCustomerBooking
+} from '../../lib/api.js'
 import { useCustomerCart } from '../../lib/customerCart.jsx'
 import { getSession } from '../../lib/auth.js'
 
 function qtySum(cart) {
   return Object.values(cart || {}).reduce((a, b) => a + (Number(b) || 0), 0)
+}
+
+function togglePick(list, value, limit) {
+  const v = String(value)
+  const cur = Array.isArray(list) ? list : []
+  if (cur.includes(v)) return cur.filter((x) => x !== v)
+  if (limit != null && cur.length >= limit) return cur
+  return [...cur, v]
 }
 
 function cartTotal(cart, itemsById) {
@@ -23,6 +46,11 @@ export default function CustomerCafePage() {
   const { id } = useParams()
   const cafeId = Number(id)
 
+  const [searchParams] = useSearchParams()
+  const bookingIdParam = searchParams.get('bookingId')
+  const bookingId = bookingIdParam ? Number(bookingIdParam) : null
+  const isBookingFoodFlow = bookingId != null && !Number.isNaN(bookingId)
+
   const [cafe, setCafe] = useState(null)
   const [menu, setMenu] = useState([])
   const [images, setImages] = useState([])
@@ -39,18 +67,150 @@ export default function CustomerCafePage() {
   const [bookGuests, setBookGuests] = useState('2')
   const [bookNote, setBookNote] = useState('')
   const [bookAmenity, setBookAmenity] = useState('')
+  const [bookFunctionType, setBookFunctionType] = useState('DINE_IN')
+  const [bookAmenities, setBookAmenities] = useState([])
+  const [bookAvailableTables, setBookAvailableTables] = useState([])
+  const [bookTablesNeeded, setBookTablesNeeded] = useState(1)
+  const [bookSelectedTables, setBookSelectedTables] = useState([])
   const [bookBusy, setBookBusy] = useState(false)
   const [bookMsg, setBookMsg] = useState('')
   const [bookErr, setBookErr] = useState('')
   const [bookPaying, setBookPaying] = useState(false)
 
-  const [orderName, setOrderName] = useState('')
-  const [orderPhone, setOrderPhone] = useState('')
+  const [me, setMe] = useState(null)
   const [orderAmenity, setOrderAmenity] = useState('')
-  const [orderTable, setOrderTable] = useState('')
+  const [orderFunctionType, setOrderFunctionType] = useState('DINE_IN')
+  const [orderAmenities, setOrderAmenities] = useState([])
+  const [orderAvailableTables, setOrderAvailableTables] = useState([])
+  const [orderTablesNeeded, setOrderTablesNeeded] = useState(1)
+  const [orderSelectedTables, setOrderSelectedTables] = useState([])
+  const [orderDate, setOrderDate] = useState('')
+  const [orderTime, setOrderTime] = useState('')
+  const [orderGuests, setOrderGuests] = useState('2')
   const [orderBusy, setOrderBusy] = useState(false)
   const [orderMsg, setOrderMsg] = useState('')
   const [orderErr, setOrderErr] = useState('')
+
+  const derivedName = useMemo(() => {
+    const pd = me?.personalDetails || {}
+    return String([pd?.firstName, pd?.lastName].filter(Boolean).join(' ') || '').trim()
+  }, [me])
+
+  const derivedPhone = useMemo(() => {
+    const pd = me?.personalDetails || {}
+    return String(pd?.phone || '').trim()
+  }, [me])
+
+  const canBookTables = useMemo(() => {
+    const need = Number(bookTablesNeeded) || 1
+    return (Array.isArray(bookSelectedTables) ? bookSelectedTables : []).length === need
+  }, [bookSelectedTables, bookTablesNeeded])
+
+  const canOrderTables = useMemo(() => {
+    if (isBookingFoodFlow) return true
+    const need = Number(orderTablesNeeded) || 1
+    return (Array.isArray(orderSelectedTables) ? orderSelectedTables : []).length === need
+  }, [isBookingFoodFlow, orderSelectedTables, orderTablesNeeded])
+
+  useEffect(() => {
+    if (!cafeId || Number.isNaN(cafeId)) return
+    ;(async () => {
+      try {
+        const list = await listPublicCafeAmenities(cafeId, bookFunctionType)
+        setBookAmenities(Array.isArray(list) ? list : [])
+      } catch {
+        setBookAmenities([])
+      }
+    })()
+  }, [cafeId, bookFunctionType])
+
+  useEffect(() => {
+    if (!cafeId || Number.isNaN(cafeId)) return
+    if (!bookDate || !bookTime || !bookFunctionType) {
+      setBookAvailableTables([])
+      setBookTablesNeeded(1)
+      setBookSelectedTables([])
+      return
+    }
+    ;(async () => {
+      try {
+        const res = await getPublicAvailableTables(cafeId, {
+          functionType: bookFunctionType,
+          bookingDate: bookDate,
+          bookingTime: bookTime,
+          guests: Number(bookGuests) || 1,
+          amenity: bookAmenity || undefined
+        })
+        const avail = Array.isArray(res?.availableTables) ? res.availableTables : []
+        setBookAvailableTables(avail)
+        const needed = Number(res?.tablesNeeded) || 1
+        setBookTablesNeeded(needed)
+        setBookSelectedTables((prev) => {
+          const cleaned = (Array.isArray(prev) ? prev : []).filter((t) => avail.includes(t))
+          if (cleaned.length >= needed) return cleaned.slice(0, needed)
+          const toAdd = avail.filter((t) => !cleaned.includes(t)).slice(0, needed - cleaned.length)
+          return [...cleaned, ...toAdd]
+        })
+      } catch {
+        setBookAvailableTables([])
+        setBookTablesNeeded(1)
+        setBookSelectedTables([])
+      }
+    })()
+  }, [cafeId, bookDate, bookTime, bookGuests, bookAmenity, bookFunctionType])
+
+  useEffect(() => {
+    if (!cafeId || Number.isNaN(cafeId)) return
+    ;(async () => {
+      try {
+        const list = await listPublicCafeAmenities(cafeId, orderFunctionType)
+        setOrderAmenities(Array.isArray(list) ? list : [])
+      } catch {
+        setOrderAmenities([])
+      }
+    })()
+  }, [cafeId, orderFunctionType])
+
+  useEffect(() => {
+    if (!cafeId || Number.isNaN(cafeId)) return
+    if (isBookingFoodFlow) {
+      setOrderAvailableTables([])
+      setOrderTablesNeeded(1)
+      setOrderSelectedTables([])
+      return
+    }
+    if (!orderDate || !orderTime || !orderFunctionType) {
+      setOrderAvailableTables([])
+      setOrderTablesNeeded(1)
+      setOrderSelectedTables([])
+      return
+    }
+    ;(async () => {
+      try {
+        const res = await getPublicAvailableTables(cafeId, {
+          functionType: orderFunctionType,
+          bookingDate: orderDate,
+          bookingTime: orderTime,
+          guests: Number(orderGuests) || 1,
+          amenity: orderAmenity || undefined
+        })
+        const avail = Array.isArray(res?.availableTables) ? res.availableTables : []
+        setOrderAvailableTables(avail)
+        const needed = Number(res?.tablesNeeded) || 1
+        setOrderTablesNeeded(needed)
+        setOrderSelectedTables((prev) => {
+          const cleaned = (Array.isArray(prev) ? prev : []).filter((t) => avail.includes(t))
+          if (cleaned.length >= needed) return cleaned.slice(0, needed)
+          const toAdd = avail.filter((t) => !cleaned.includes(t)).slice(0, needed - cleaned.length)
+          return [...cleaned, ...toAdd]
+        })
+      } catch {
+        setOrderAvailableTables([])
+        setOrderTablesNeeded(1)
+        setOrderSelectedTables([])
+      }
+    })()
+  }, [cafeId, isBookingFoodFlow, orderDate, orderTime, orderGuests, orderAmenity, orderFunctionType])
 
   function loadRazorpayScript() {
     return new Promise((resolve) => {
@@ -113,6 +273,19 @@ export default function CustomerCafePage() {
       ignore = true
     }
   }, [cafeId])
+
+  useEffect(() => {
+    const username = String(session?.username || '').trim()
+    if (!username) return
+    ;(async () => {
+      try {
+        const p = await getMyProfile(username)
+        setMe(p && typeof p === 'object' ? p : null)
+      } catch {
+        setMe(null)
+      }
+    })()
+  }, [session?.username])
 
   return (
     <div className="min-h-screen bg-[#EDE4DA] text-slate-900">
@@ -183,20 +356,12 @@ export default function CustomerCafePage() {
 
               <div className="mt-4 rounded-2xl border border-black/10 bg-white/70 p-5">
                 <div className="text-sm font-semibold">Book a table</div>
-                <div className="mt-1 text-xs text-slate-500">Choose date and time and share your details.</div>
+                <div className="mt-1 text-xs text-slate-500">Choose date and time and then select function, amenity, and table(s).</div>
 
                 {bookErr ? <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{bookErr}</div> : null}
                 {bookMsg ? <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{bookMsg}</div> : null}
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <div className="grid gap-1">
-                    <div className="text-xs font-semibold text-slate-600">Customer name *</div>
-                    <input className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm outline-none" value={bookName} onChange={(e) => setBookName(e.target.value)} />
-                  </div>
-                  <div className="grid gap-1">
-                    <div className="text-xs font-semibold text-slate-600">Phone number *</div>
-                    <input className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm outline-none" value={bookPhone} onChange={(e) => setBookPhone(e.target.value)} placeholder="9876543210" />
-                  </div>
                   <div className="grid gap-1">
                     <div className="text-xs font-semibold text-slate-600">Date *</div>
                     <input type="date" className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm outline-none" value={bookDate} onChange={(e) => setBookDate(e.target.value)} />
@@ -218,10 +383,56 @@ export default function CustomerCafePage() {
                     <div className="text-xs font-semibold text-slate-600">Amenity preference</div>
                     <select className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm outline-none" value={bookAmenity} onChange={(e) => setBookAmenity(e.target.value)}>
                       <option value="">No preference</option>
-                      <option value="WINDOW">Beside window</option>
-                      <option value="QUIET">Quiet area</option>
-                      <option value="FAMILY">Family seating</option>
+                      {(Array.isArray(bookAmenities) ? bookAmenities : []).map((a) => (
+                        <option key={a.id} value={a.name}>
+                          {a.name}
+                        </option>
+                      ))}
                     </select>
+                  </div>
+
+                  <div className="grid gap-1 md:col-span-2">
+                    <div className="text-xs font-semibold text-slate-600">Function type</div>
+                    <select className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm outline-none" value={bookFunctionType} onChange={(e) => setBookFunctionType(e.target.value)}>
+                      <option value="DINE_IN">DINE_IN</option>
+                      <option value="BIRTHDAY">BIRTHDAY</option>
+                      <option value="CORPORATE">CORPORATE</option>
+                    </select>
+                  </div>
+
+                  <div className="grid gap-1 md:col-span-2">
+                    <div className="text-xs font-semibold text-slate-600">Table(s) (select {bookTablesNeeded})</div>
+                    <div className="rounded-xl border border-black/10 bg-white p-3">
+                      <div className="flex flex-wrap gap-2">
+                        {(Array.isArray(bookAvailableTables) ? bookAvailableTables : []).length === 0 ? (
+                          <div className="text-sm text-slate-500">No tables available.</div>
+                        ) : (
+                          (Array.isArray(bookAvailableTables) ? bookAvailableTables : []).map((t) => {
+                            const selected = (Array.isArray(bookSelectedTables) ? bookSelectedTables : []).includes(t)
+                            return (
+                              <button
+                                key={t}
+                                type="button"
+                                className={
+                                  selected
+                                    ? 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-900'
+                                    : 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50'
+                                }
+                                onClick={() => {
+                                  setBookSelectedTables((prev) => togglePick(prev, t, Number(bookTablesNeeded) || 1))
+                                }}
+                              >
+                                {t}
+                              </button>
+                            )
+                          })
+                        )}
+                      </div>
+                      <div className="mt-2 text-xs text-slate-500">
+                        Selected {(Array.isArray(bookSelectedTables) ? bookSelectedTables : []).length} / {bookTablesNeeded}
+                        {!canBookTables ? ' (select exact tables)' : ''}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -229,20 +440,30 @@ export default function CustomerCafePage() {
                   <button
                     type="button"
                     className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
-                    disabled={bookBusy}
+                    disabled={bookBusy || !canBookTables}
                     onClick={async () => {
                       setBookErr('')
                       setBookMsg('')
                       setBookBusy(true)
                       try {
+                        if (!derivedName || !derivedPhone) {
+                          setBookErr('Please complete your profile (name and phone) before booking.')
+                          return
+                        }
+                        if (!canBookTables) {
+                          setBookErr(`Please select exactly ${Number(bookTablesNeeded) || 1} table(s).`)
+                          return
+                        }
                         const payload = {
-                          customerName: bookName,
-                          customerPhone: bookPhone,
+                          customerName: derivedName,
+                          customerPhone: derivedPhone,
                           bookingDate: bookDate,
                           bookingTime: bookTime,
                           guests: Number(bookGuests) || 0,
-                          note: bookNote,
-                          amenityPreference: bookAmenity || null
+                          note: String(bookNote || '').trim() || '-',
+                          amenityPreference: bookAmenity || null,
+                          functionType: bookFunctionType,
+                          allocatedTable: (Array.isArray(bookSelectedTables) && bookSelectedTables.length > 0) ? bookSelectedTables.join(', ') : null
                         }
                         const created = await createCustomerBooking(session?.username, cafeId, payload)
 
@@ -438,24 +659,43 @@ export default function CustomerCafePage() {
                             return
                           }
 
-                          if (cartCafeId != null && cartCafeId !== cafeId) {
-                            setOrderErr('Your cart belongs to another cafe. Clear cart to continue.')
+                          const pd = me?.personalDetails || {}
+                          const derivedName = String([pd?.firstName, pd?.lastName].filter(Boolean).join(' ') || '').trim()
+                          const derivedPhone = String(pd?.phone || '').trim()
+                          if (!derivedName || !derivedPhone) {
+                            setOrderErr('Please complete your profile (name and phone) before placing an order.')
                             return
                           }
+
+                          if (!canOrderTables) {
+                            setOrderErr(`Please select exactly ${Number(orderTablesNeeded) || 1} table(s).`)
+                            return
+                          }
+
                           const items = Object.values(cart || {}).map((e) => ({ menuItemId: e?.item?.id, qty: e?.qty }))
                           const orderPayload = {
                             cafeId,
-                            customerName: orderName,
-                            customerPhone: orderPhone,
+                            customerName: derivedName,
+                            customerPhone: derivedPhone,
                             items,
                             amenityPreference: orderAmenity || null,
-                            allocatedTable: String(orderTable || '').trim() || null
+                            allocatedTable:
+                              Array.isArray(orderSelectedTables) && orderSelectedTables.length > 0 ? orderSelectedTables.join(', ') : null,
+                            functionType: orderFunctionType
+                          }
+
+                          if (!isBookingFoodFlow) {
+                            orderPayload.bookingDate = orderDate
+                            orderPayload.bookingTime = orderTime
+                            orderPayload.guests = Number(orderGuests) || 1
                           }
 
                           const ok = await loadRazorpayScript()
                           if (!ok) throw new Error('Failed to load Razorpay')
 
-                          const rp = await createRazorpayOrderForCustomerCart(username, orderPayload)
+                          const rp = isBookingFoodFlow
+                            ? await createRazorpayOrderForCustomerBookingFood(username, bookingId, orderPayload)
+                            : await createRazorpayOrderForCustomerCart(username, orderPayload)
 
                           await new Promise((resolve, reject) => {
                             const options = {
@@ -471,14 +711,25 @@ export default function CustomerCafePage() {
                               },
                               handler: async function (response) {
                                 try {
-                                  await confirmRazorpayCustomerCartOrder(username, {
-                                    order: orderPayload,
-                                    payment: {
-                                      razorpayOrderId: response.razorpay_order_id,
-                                      razorpayPaymentId: response.razorpay_payment_id,
-                                      razorpaySignature: response.razorpay_signature
-                                    }
-                                  })
+                                  if (isBookingFoodFlow) {
+                                    await confirmRazorpayCustomerBookingFoodOrder(username, bookingId, {
+                                      order: orderPayload,
+                                      payment: {
+                                        razorpayOrderId: response.razorpay_order_id,
+                                        razorpayPaymentId: response.razorpay_payment_id,
+                                        razorpaySignature: response.razorpay_signature
+                                      }
+                                    })
+                                  } else {
+                                    await confirmRazorpayCustomerCartOrder(username, {
+                                      order: orderPayload,
+                                      payment: {
+                                        razorpayOrderId: response.razorpay_order_id,
+                                        razorpayPaymentId: response.razorpay_payment_id,
+                                        razorpaySignature: response.razorpay_signature
+                                      }
+                                    })
+                                  }
                                   resolve(true)
                                 } catch (e) {
                                   reject(e)
@@ -494,7 +745,7 @@ export default function CustomerCafePage() {
                           })
 
                           clear()
-                          setOrderMsg('Order paid and placed')
+                          setOrderMsg(isBookingFoodFlow ? 'Food paid and order placed for booking' : 'Order paid and placed')
                         } catch (e) {
                           const d = e?.response?.data
                           const msg = (typeof d === 'string' ? d : (d?.message || d?.error || null)) || e?.message
@@ -510,33 +761,97 @@ export default function CustomerCafePage() {
                     <div className="mt-3 grid gap-2">
                       {orderErr ? <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{orderErr}</div> : null}
                       {orderMsg ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{orderMsg}</div> : null}
-                      <div className="grid gap-1">
-                        <div className="text-xs font-semibold text-slate-600">Name for order *</div>
-                        <input className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none" value={orderName} onChange={(e) => setOrderName(e.target.value)} />
-                      </div>
-                      <div className="grid gap-1">
-                        <div className="text-xs font-semibold text-slate-600">Phone for order *</div>
-                        <input className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none" value={orderPhone} onChange={(e) => setOrderPhone(e.target.value)} />
-                      </div>
+                      {!isBookingFoodFlow ? (
+                        <>
+                          <div className="grid gap-1">
+                            <div className="text-xs font-semibold text-slate-600">Date *</div>
+                            <input
+                              type="date"
+                              className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none"
+                              value={orderDate}
+                              onChange={(e) => setOrderDate(e.target.value)}
+                            />
+                          </div>
+
+                          <div className="grid gap-1">
+                            <div className="text-xs font-semibold text-slate-600">Time *</div>
+                            <input
+                              type="time"
+                              className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none"
+                              value={orderTime}
+                              onChange={(e) => setOrderTime(e.target.value)}
+                            />
+                          </div>
+
+                          <div className="grid gap-1">
+                            <div className="text-xs font-semibold text-slate-600">Guests *</div>
+                            <input
+                              type="number"
+                              min={1}
+                              className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none"
+                              value={orderGuests}
+                              onChange={(e) => setOrderGuests(e.target.value)}
+                            />
+                          </div>
+                        </>
+                      ) : null}
                       <div className="grid gap-1">
                         <div className="text-xs font-semibold text-slate-600">Amenity preference</div>
                         <select className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none" value={orderAmenity} onChange={(e) => setOrderAmenity(e.target.value)}>
                           <option value="">No preference</option>
-                          <option value="WINDOW">Beside window</option>
-                          <option value="QUIET">Quiet area</option>
-                          <option value="FAMILY">Family seating</option>
+                          {(Array.isArray(orderAmenities) ? orderAmenities : []).map((a) => (
+                            <option key={a.id} value={a.name}>
+                              {a.name}
+                            </option>
+                          ))}
                         </select>
                       </div>
 
                       <div className="grid gap-1">
-                        <div className="text-xs font-semibold text-slate-600">Table (optional)</div>
-                        <input
-                          className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none"
-                          value={orderTable}
-                          onChange={(e) => setOrderTable(e.target.value)}
-                          placeholder="e.g. T1"
-                        />
+                        <div className="text-xs font-semibold text-slate-600">Function type</div>
+                        <select className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none" value={orderFunctionType} onChange={(e) => setOrderFunctionType(e.target.value)}>
+                          <option value="DINE_IN">DINE_IN</option>
+                          <option value="BIRTHDAY">BIRTHDAY</option>
+                          <option value="CORPORATE">CORPORATE</option>
+                        </select>
                       </div>
+
+                      {!isBookingFoodFlow ? (
+                        <div className="grid gap-1">
+                          <div className="text-xs font-semibold text-slate-600">Table(s) (select {orderTablesNeeded})</div>
+                          <div className="rounded-xl border border-black/10 bg-white p-3">
+                            <div className="flex flex-wrap gap-2">
+                              {(Array.isArray(orderAvailableTables) ? orderAvailableTables : []).length === 0 ? (
+                                <div className="text-sm text-slate-500">No tables available.</div>
+                              ) : (
+                                (Array.isArray(orderAvailableTables) ? orderAvailableTables : []).map((t) => {
+                                  const selected = (Array.isArray(orderSelectedTables) ? orderSelectedTables : []).includes(t)
+                                  return (
+                                    <button
+                                      key={t}
+                                      type="button"
+                                      className={
+                                        selected
+                                          ? 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-900'
+                                          : 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50'
+                                      }
+                                      onClick={() => {
+                                        setOrderSelectedTables((prev) => togglePick(prev, t, Number(orderTablesNeeded) || 1))
+                                      }}
+                                    >
+                                      {t}
+                                    </button>
+                                  )
+                                })
+                              )}
+                            </div>
+                            <div className="mt-2 text-xs text-slate-500">
+                              Selected {(Array.isArray(orderSelectedTables) ? orderSelectedTables : []).length} / {orderTablesNeeded}
+                              {!canOrderTables ? ' (select exact tables)' : ''}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 )}

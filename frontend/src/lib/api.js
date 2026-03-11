@@ -110,6 +110,35 @@ export async function listCafeMenu(cafeId) {
   return res.data
 }
 
+export async function createCafeMenuItemAdmin(cafeId, payload) {
+  const res = await api.post(`/api/admin/cafes/${cafeId}/menu`, payload)
+  return res.data
+}
+
+export async function updateCafeMenuItemAdmin(cafeId, menuItemId, payload) {
+  const res = await api.put(`/api/admin/cafes/${cafeId}/menu/${menuItemId}`, payload)
+  return res.data
+}
+
+export async function updateCafeMenuAvailabilityAdmin(cafeId, menuItemId, available) {
+  const res = await api.put(`/api/admin/cafes/${cafeId}/menu/${menuItemId}/availability`, {
+    available
+  })
+  return res.data
+}
+
+export async function uploadCafeMenuItemImageAdmin(cafeId, menuItemId, file) {
+  const fd = new FormData()
+  fd.append('file', file)
+  const res = await api.post(`/api/admin/cafes/${cafeId}/menu/${menuItemId}/image`, fd)
+  return res.data
+}
+
+export async function deleteCafeMenuItemAdmin(cafeId, menuItemId) {
+  const res = await api.delete(`/api/admin/cafes/${cafeId}/menu/${menuItemId}`)
+  return res.data
+}
+
 export async function getCafeDetailAdmin(cafeId) {
   const res = await api.get(`/api/admin/cafes/${cafeId}`)
   return res.data
@@ -186,6 +215,22 @@ export async function listPublicCafeImages(cafeId) {
 
 export async function listPublicCafeMenu(cafeId) {
   const res = await api.get(`/api/public/cafes/${cafeId}/menu`)
+  return res.data
+}
+
+export async function listPublicCafeAmenities(cafeId, functionType) {
+  const res = await api.get(`/api/public/cafes/${cafeId}/amenities`, {
+    params: {
+      functionType: functionType || undefined
+    }
+  })
+  return res.data
+}
+
+export async function getPublicAvailableTables(cafeId, params) {
+  const res = await api.get(`/api/public/cafes/${cafeId}/available-tables`, {
+    params
+  })
   return res.data
 }
 
@@ -318,6 +363,15 @@ export async function denyOwnerBooking(username, bookingId, payload) {
   return res.data
 }
 
+export async function denyOwnerBookingWithRefund(username, bookingId, payload) {
+  const res = await api.post(`/api/owner/bookings/${bookingId}/deny-refund`, payload, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
 export async function deleteOwnerBooking(username, bookingId) {
   const res = await api.delete(`/api/owner/bookings/${bookingId}`, {
     headers: {
@@ -380,7 +434,7 @@ export async function listStaffApprovedBookings(username) {
 export async function serveStaffOrder(username, orderId, allocatedTable) {
   const res = await api.post(
     `/api/staff/orders/${orderId}/serve`,
-    { allocatedTable },
+    {},
     {
       headers: {
         'X-USERNAME': username
@@ -419,6 +473,24 @@ export async function createRazorpayOrderForCustomerOrder(username, orderId) {
 
 export async function verifyRazorpayPaymentForCustomerOrder(username, orderId, payload) {
   const res = await api.post(`/api/customer/orders/${orderId}/payment/razorpay/verify`, payload, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function createRazorpayOrderForCustomerBookingFood(username, bookingId, payload) {
+  const res = await api.post(`/api/customer/bookings/${bookingId}/food/payment/razorpay/order`, payload, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function confirmRazorpayCustomerBookingFoodOrder(username, bookingId, payload) {
+  const res = await api.post(`/api/customer/bookings/${bookingId}/food/payment/razorpay/confirm`, payload, {
     headers: {
       'X-USERNAME': username
     }
@@ -620,6 +692,42 @@ export async function upsertOwnerCapacity(username, payload) {
 
 export async function deleteOwnerCapacity(username, id) {
   const res = await api.delete(`/api/owner/capacities/${id}`, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function listOwnerAmenities(username) {
+  const res = await api.get('/api/owner/amenities', {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function createOwnerAmenity(username, payload) {
+  const res = await api.post('/api/owner/amenities', payload, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function updateOwnerAmenity(username, id, payload) {
+  const res = await api.put(`/api/owner/amenities/${id}`, payload, {
+    headers: {
+      'X-USERNAME': username
+    }
+  })
+  return res.data
+}
+
+export async function deleteOwnerAmenity(username, id) {
+  const res = await api.delete(`/api/owner/amenities/${id}`, {
     headers: {
       'X-USERNAME': username
     }

@@ -1,24 +1,27 @@
 package com.cafe.service;
 
-import com.cafe.dto.AdminUserDetail;
-import com.cafe.dto.CafeDocumentRow;
-import com.cafe.dto.CafeProfileRequest;
-import com.cafe.dto.CafeProfileResponse;
-import com.cafe.dto.CafeImageRow;
-import com.cafe.dto.FunctionCapacityRequest;
-import com.cafe.dto.FunctionCapacityRow;
-import com.cafe.dto.MenuItemRequest;
-import com.cafe.dto.MenuItemRow;
-import com.cafe.dto.MenuAvailabilityRequest;
-import com.cafe.dto.OwnerStaffCreateRequest;
-import com.cafe.dto.OwnerStaffRow;
-import com.cafe.dto.CafeBookingRow;
-import com.cafe.dto.CafeOrderRow;
-import com.cafe.dto.BookingDecisionRequest;
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
+import com.cafe.dto.AdminUserDetail;
+import com.cafe.dto.BookingDecisionRequest;
+import com.cafe.dto.CafeAmenityRequest;
+import com.cafe.dto.CafeAmenityRow;
+import com.cafe.dto.CafeBookingRow;
+import com.cafe.dto.CafeDocumentRow;
+import com.cafe.dto.CafeImageRow;
+import com.cafe.dto.CafeOrderRow;
+import com.cafe.dto.CafeProfileRequest;
+import com.cafe.dto.CafeProfileResponse;
+import com.cafe.dto.FunctionCapacityRequest;
+import com.cafe.dto.FunctionCapacityRow;
+import com.cafe.dto.MenuAvailabilityRequest;
+import com.cafe.dto.MenuItemRequest;
+import com.cafe.dto.MenuItemRow;
+import com.cafe.dto.OwnerStaffCreateRequest;
+import com.cafe.dto.OwnerStaffRow;
 
 public interface OwnerService {
 
@@ -76,9 +79,19 @@ public interface OwnerService {
 
     ResponseEntity<CafeBookingRow> denyBooking(String ownerUsername, Long bookingId, BookingDecisionRequest request);
 
+    ResponseEntity<CafeBookingRow> denyBookingWithRefund(String ownerUsername, Long bookingId, BookingDecisionRequest request);
+
     ResponseEntity<String> deleteBooking(String ownerUsername, Long bookingId);
 
     ResponseEntity<List<CafeOrderRow>> listOrders(String ownerUsername);
 
     ResponseEntity<String> deleteOrder(String ownerUsername, Long orderId);
+
+    ResponseEntity<List<CafeAmenityRow>> listAmenities(String ownerUsername);
+
+    ResponseEntity<CafeAmenityRow> createAmenity(String ownerUsername, CafeAmenityRequest request);
+
+    ResponseEntity<CafeAmenityRow> updateAmenity(String ownerUsername, Long id, CafeAmenityRequest request);
+
+    ResponseEntity<String> deleteAmenity(String ownerUsername, Long id);
 }
