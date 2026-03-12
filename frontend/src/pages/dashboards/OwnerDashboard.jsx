@@ -19,6 +19,7 @@ import {
   denyOwnerBookingWithRefund,
   denyOwnerBooking,
   deleteOwnerOrder,
+  listOwnerCafes,
   getOwnerCafe,
   getOwnerMe,
   listOwnerBookings,
@@ -27,6 +28,8 @@ import {
   listOwnerMenu,
   listOwnerOrders,
   listOwnerStaff,
+  getOwnerAnalyticsDetails,
+  getOwnerAnalyticsSummary,
   uploadOwnerMenuItemImage,
   updateOwnerMenuAvailability,
   uploadOwnerImage,
@@ -87,7 +90,7 @@ function ProfileSection({
           >
             Reload
           </button>
-          {cafe?.id ? (
+          {/* {cafe?.id ? (
             <button
               type="button"
               className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-500/15 disabled:opacity-60"
@@ -96,7 +99,7 @@ function ProfileSection({
             >
               Delete cafe
             </button>
-          ) : null}
+          ) : null} */}
           <button
             type="button"
             className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
@@ -398,6 +401,126 @@ export default function OwnerDashboard() {
     }
   }, [loc?.pathname])
 
+  async function onSaveAddCafe() {
+    setCafeErr('')
+    setCafeMsg('')
+
+    if (!canSaveAddCafe) {
+      setCafeErr('Cafe name is required')
+      return
+    }
+
+    setCafeLoading(true)
+    try {
+      const payload = {
+        cafeName: String(addCafeDraft?.cafeName || '').trim(),
+        ownerNames: String(addCafeDraft?.ownerNames || '').trim() || null,
+        pocDesignation: String(addCafeDraft?.pocDesignation || '').trim() || null,
+        description: String(addCafeDraft?.description || '').trim() || null,
+        phone: String(addCafeDraft?.phone || '').trim() || null,
+        email: String(addCafeDraft?.email || '').trim() || null,
+        whatsappNumber: String(addCafeDraft?.whatsappNumber || '').trim() || null,
+        addressLine: String(addCafeDraft?.addressLine || '').trim() || null,
+        city: String(addCafeDraft?.city || '').trim() || null,
+        state: String(addCafeDraft?.state || '').trim() || null,
+        pincode: String(addCafeDraft?.pincode || '').trim() || null,
+        openingTime: String(addCafeDraft?.openingTime || '').trim() || null,
+        closingTime: String(addCafeDraft?.closingTime || '').trim() || null,
+        fssaiNumber: String(addCafeDraft?.fssaiNumber || '').trim() || null,
+        panNumber: String(addCafeDraft?.panNumber || '').trim() || null,
+        gstin: String(addCafeDraft?.gstin || '').trim() || null,
+        shopLicenseNumber: String(addCafeDraft?.shopLicenseNumber || '').trim() || null,
+        bankAccountNumber: String(addCafeDraft?.bankAccountNumber || '').trim() || null,
+        bankIfsc: String(addCafeDraft?.bankIfsc || '').trim() || null,
+        bankAccountHolderName: String(addCafeDraft?.bankAccountHolderName || '').trim() || null,
+        active: addCafeDraft?.active ?? true
+      }
+
+      const saved = await upsertOwnerCafe(ownerUsername, payload)
+      if (saved?.id != null) {
+        setSelectedCafeId(Number(saved.id))
+        try {
+          window.localStorage.setItem('ownerSelectedCafeId', String(saved.id))
+        } catch {
+          // ignore
+        }
+      }
+
+      setCafeMsg('Saved')
+      setAddCafeOpen(false)
+      setHasCafe(true)
+      await refreshCafes(saved?.id)
+      if (saved?.id != null) {
+        await refreshCafeWithId(Number(saved.id))
+      }
+    } catch (e) {
+      const status = e?.response?.status
+      const data = e?.response?.data
+      const msg = typeof data === 'string' ? data : data ? JSON.stringify(data) : ''
+      setCafeErr(`${status ? `HTTP ${status}: ` : ''}${msg || 'Failed to save cafe'}`)
+    } finally {
+      setCafeLoading(false)
+    }
+  }
+
+  const [hasCafe, setHasCafe] = useState(false)
+
+  const sidebarItems = useMemo(() => {
+    const disabled = !hasCafe
+    return [
+      { key: 'myProfile', label: 'My Profile', disabled: false },
+      { key: 'profile', label: 'Cafe Profile', disabled: false },
+      { key: 'staff', label: 'Staff', disabled },
+      { key: 'menu', label: 'Menu', disabled },
+      { key: 'capacities', label: 'Tables/Functions', disabled },
+      { key: 'images', label: 'Images', disabled },
+      { key: 'revenue', label: 'Revenue', disabled },
+      { key: 'bookings', label: 'Bookings', disabled },
+      { key: 'orders', label: 'Orders', disabled }
+    ]
+  }, [hasCafe])
+
+  function SidebarButton({ item }) {
+    const active = tab === item.key
+    const disabled = !!item.disabled
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          if (!disabled) setTab(item.key)
+        }}
+        disabled={disabled}
+        className={
+          (
+            'w-full rounded-xl px-4 py-2 text-left text-sm font-semibold transition ' +
+            (active
+              ? 'bg-emerald-600 text-white'
+              : disabled
+                ? 'border border-black/10 bg-white/40 text-slate-400'
+                : 'border border-black/10 bg-white/70 text-slate-800 hover:bg-white')
+          ).trim()
+        }
+      >
+        {item.label}
+      </button>
+    )
+  }
+
+  function SidebarLogoutButton() {
+    return (
+      <button
+        type="button"
+        className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+        onClick={() => {
+          clearSession()
+          window.location.href = '/login'
+        }}
+      >
+        Logout
+      </button>
+    )
+  }
+
   const [cafe, setCafe] = useState(null)
   const [cafeLoading, setCafeLoading] = useState(false)
   const [cafeMsg, setCafeMsg] = useState('')
@@ -406,7 +529,46 @@ export default function OwnerDashboard() {
   const cafeSteps = ['Basic & contact', 'Legal', 'Bank']
   const [cafeStep, setCafeStep] = useState(0)
 
-  const [hasCafe, setHasCafe] = useState(false)
+  const [addCafeDraft, setAddCafeDraft] = useState(null)
+  const [addCafeStep, setAddCafeStep] = useState(0)
+  const canSaveCafe = useMemo(() => {
+    return String(cafe?.cafeName || '').trim().length > 0
+  }, [cafe])
+
+  const canGoNextCafe = useMemo(() => {
+    if (cafeStep === 0) return canSaveCafe
+    return true
+  }, [cafeStep, canSaveCafe])
+
+  const canSubmitCafe = useMemo(() => {
+    return canSaveCafe
+  }, [canSaveCafe])
+
+  const canSaveAddCafe = useMemo(() => {
+    return String(addCafeDraft?.cafeName || '').trim().length > 0
+  }, [addCafeDraft])
+
+  const canGoNextAddCafe = useMemo(() => {
+    if (addCafeStep === 0) return canSaveAddCafe
+    return true
+  }, [addCafeStep, canSaveAddCafe])
+
+  const canSubmitAddCafe = useMemo(() => {
+    return canSaveAddCafe
+  }, [canSaveAddCafe])
+
+  const [cafes, setCafes] = useState([])
+  const [cafesLoading, setCafesLoading] = useState(false)
+  const [selectedCafeId, setSelectedCafeId] = useState(() => {
+    try {
+      const v = window.localStorage.getItem('ownerSelectedCafeId')
+      return v ? Number(v) : null
+    } catch {
+      return null
+    }
+  })
+
+  const [addCafeOpen, setAddCafeOpen] = useState(false)
 
   const [staff, setStaff] = useState([])
   const [staffLoading, setStaffLoading] = useState(false)
@@ -432,6 +594,12 @@ export default function OwnerDashboard() {
   const [newMenuDescription, setNewMenuDescription] = useState('')
   const [newMenuAvailable, setNewMenuAvailable] = useState(true)
   const [newMenuImageFile, setNewMenuImageFile] = useState(null)
+
+  const [revLoading, setRevLoading] = useState(false)
+  const [revErr, setRevErr] = useState('')
+  const [ownerAnalyticsSummary, setOwnerAnalyticsSummary] = useState(null)
+  const [ownerAnalyticsDetails, setOwnerAnalyticsDetails] = useState(null)
+  const [revRefreshTick, setRevRefreshTick] = useState(0)
 
   const [capacities, setCapacities] = useState([])
   const [capLoading, setCapLoading] = useState(false)
@@ -532,6 +700,61 @@ export default function OwnerDashboard() {
   ])
 
   const [newStaffDocuments, setNewStaffDocuments] = useState([])
+
+  const canGoNextStaff = useMemo(() => {
+    if (newStaffStep === 0) {
+      return (
+        String(newStaffFirstName || '').trim().length > 0 &&
+        String(newStaffLastName || '').trim().length > 0 &&
+        String(newStaffEmail || '').trim().length > 0 &&
+        String(newStaffPhone || '').trim().length > 0
+      )
+    }
+    if (newStaffStep === 1) {
+      return (
+        String(newStaffStreet || '').trim().length > 0 &&
+        String(newStaffCity || '').trim().length > 0 &&
+        String(newStaffState || '').trim().length > 0 &&
+        String(newStaffPincode || '').trim().length > 0
+      )
+    }
+    return true
+  }, [
+    newStaffStep,
+    newStaffFirstName,
+    newStaffLastName,
+    newStaffEmail,
+    newStaffPhone,
+    newStaffStreet,
+    newStaffCity,
+    newStaffState,
+    newStaffPincode
+  ])
+
+  const canCreateStaff = useMemo(() => {
+    return (
+      String(newStaffFirstName || '').trim().length > 0 &&
+      String(newStaffLastName || '').trim().length > 0 &&
+      String(newStaffEmail || '').trim().length > 0 &&
+      String(newStaffPhone || '').trim().length > 0 &&
+      String(newStaffStreet || '').trim().length > 0 &&
+      String(newStaffCity || '').trim().length > 0 &&
+      String(newStaffState || '').trim().length > 0 &&
+      String(newStaffPincode || '').trim().length > 0 &&
+      Array.isArray(newStaffDocuments) &&
+      newStaffDocuments.length > 0
+    )
+  }, [
+    newStaffFirstName,
+    newStaffLastName,
+    newStaffEmail,
+    newStaffPhone,
+    newStaffStreet,
+    newStaffCity,
+    newStaffState,
+    newStaffPincode,
+    newStaffDocuments
+  ])
 
   const [didPrefillCafe, setDidPrefillCafe] = useState(false)
 
@@ -679,13 +902,43 @@ export default function OwnerDashboard() {
     return filteredOrders.slice(start, start + size)
   }, [filteredOrders, ordersPage, ordersPageSize, ordersTotalPages])
 
+  async function refreshCafes(nextSelectedId) {
+    if (!ownerUsername) return []
+    setCafesLoading(true)
+    try {
+      const res = await listOwnerCafes(ownerUsername)
+      const rows = Array.isArray(res) ? res : []
+      setCafes(rows)
+
+      const preferred = nextSelectedId ?? selectedCafeId
+      const preferredExists = preferred != null && rows.some((c) => Number(c?.id) === Number(preferred))
+      const resolved = preferredExists ? preferred : (rows[0]?.id ?? null)
+
+      setSelectedCafeId(resolved != null ? Number(resolved) : null)
+      try {
+        if (resolved != null) window.localStorage.setItem('ownerSelectedCafeId', String(resolved))
+        else window.localStorage.removeItem('ownerSelectedCafeId')
+      } catch {
+        // ignore
+      }
+
+      return rows
+    } catch {
+      setCafes([])
+      setSelectedCafeId(null)
+      return []
+    } finally {
+      setCafesLoading(false)
+    }
+  }
+
   async function onDeleteCafe() {
     if (!window.confirm('Delete your cafe? This will remove menu items, images, and capacities.')) return
     setCafeErr('')
     setCafeMsg('')
     setCafeLoading(true)
     try {
-      await deleteOwnerCafe(ownerUsername)
+      await deleteOwnerCafe(ownerUsername, selectedCafeId)
       setCafe(null)
       setHasCafe(false)
       setTab('profile')
@@ -694,9 +947,33 @@ export default function OwnerDashboard() {
       setImages([])
       setStaff([])
       setCafeMsg('Deleted')
+      await refreshCafes()
     } catch (e) {
       const msg = e?.response?.data
       setCafeErr(typeof msg === 'string' ? msg : 'Failed to delete cafe')
+    } finally {
+      setCafeLoading(false)
+    }
+  }
+
+  async function refreshCafeWithId(nextCafeId) {
+    setCafeErr('')
+    setCafeMsg('')
+    setCafeLoading(true)
+    try {
+      const res = await getOwnerCafe(ownerUsername, nextCafeId)
+      setCafe(res)
+      setHasCafe(true)
+      return true
+    } catch (e) {
+      if (e?.response?.status === 404) {
+        setCafe((c) => (c && Object.keys(c).length > 0 ? c : null))
+        setHasCafe(false)
+        return false
+      }
+      const msg = e?.response?.data
+      setCafeErr(typeof msg === 'string' ? msg : 'Failed to load cafe profile')
+      return false
     } finally {
       setCafeLoading(false)
     }
@@ -707,7 +984,7 @@ export default function OwnerDashboard() {
     setCafeMsg('')
     setCafeLoading(true)
     try {
-      const res = await getOwnerCafe(ownerUsername)
+      const res = await getOwnerCafe(ownerUsername, selectedCafeId)
       setCafe(res)
       setHasCafe(true)
       return true
@@ -728,6 +1005,8 @@ export default function OwnerDashboard() {
   async function onSaveCafe() {
     setCafeErr('')
     setCafeMsg('')
+
+    const wasCreatingNew = selectedCafeId == null
 
     if (!canSaveCafe) {
       setCafeErr('Cafe name is required')
@@ -760,9 +1039,26 @@ export default function OwnerDashboard() {
         active: cafe?.active ?? true
       }
 
-      await upsertOwnerCafe(ownerUsername, payload)
+      const saved = await upsertOwnerCafe(ownerUsername, payload)
+      if (saved?.id != null) {
+        setSelectedCafeId(Number(saved.id))
+        try {
+          window.localStorage.setItem('ownerSelectedCafeId', String(saved.id))
+        } catch {
+          // ignore
+        }
+      }
       setCafeMsg('Saved')
-      await refreshCafe()
+      await refreshCafes(saved?.id)
+      if (saved?.id != null) {
+        await refreshCafeWithId(Number(saved.id))
+      } else {
+        await refreshCafe()
+      }
+
+      if (wasCreatingNew) {
+        setAddCafeOpen(false)
+      }
     } catch (e) {
       const status = e?.response?.status
       const data = e?.response?.data
@@ -778,7 +1074,7 @@ export default function OwnerDashboard() {
     setStaffMsg('')
     setStaffLoading(true)
     try {
-      const res = await listOwnerStaff(ownerUsername)
+      const res = await listOwnerStaff(ownerUsername, selectedCafeId)
       setStaff(Array.isArray(res) ? res : [])
     } catch (e) {
       const msg = e?.response?.data
@@ -793,7 +1089,7 @@ export default function OwnerDashboard() {
     setMenuMsg('')
     setMenuLoading(true)
     try {
-      const res = await listOwnerMenu(ownerUsername)
+      const res = await listOwnerMenu(ownerUsername, selectedCafeId)
       setMenu(Array.isArray(res) ? res : [])
     } catch (e) {
       const msg = e?.response?.data
@@ -808,7 +1104,7 @@ export default function OwnerDashboard() {
     setCapMsg('')
     setCapLoading(true)
     try {
-      const res = await listOwnerCapacities(ownerUsername)
+      const res = await listOwnerCapacities(ownerUsername, selectedCafeId)
       setCapacities(Array.isArray(res) ? res : [])
     } catch (e) {
       const msg = e?.response?.data
@@ -823,7 +1119,7 @@ export default function OwnerDashboard() {
     setAmenityMsg('')
     setAmenityLoading(true)
     try {
-      const res = await listOwnerAmenities(ownerUsername)
+      const res = await listOwnerAmenities(ownerUsername, selectedCafeId)
       setAmenities(Array.isArray(res) ? res : [])
     } catch (e) {
       const msg = e?.response?.data
@@ -838,7 +1134,7 @@ export default function OwnerDashboard() {
     setImgMsg('')
     setImgLoading(true)
     try {
-      const res = await listOwnerImages(ownerUsername)
+      const res = await listOwnerImages(ownerUsername, selectedCafeId)
       setImages(Array.isArray(res) ? res : [])
     } catch (e) {
       const msg = e?.response?.data
@@ -852,11 +1148,18 @@ export default function OwnerDashboard() {
     setBookingsErr('')
     setBookingsLoading(true)
     try {
-      const res = await listOwnerBookings(ownerUsername)
+      if (selectedCafeId == null) {
+        setBookings([])
+        setBookingsErr('Select a cafe first')
+        return
+      }
+      const res = await listOwnerBookings(ownerUsername, selectedCafeId)
       setBookings(Array.isArray(res) ? res : [])
     } catch (e) {
-      const msg = e?.response?.data
-      setBookingsErr(typeof msg === 'string' ? msg : 'Failed to load bookings')
+      const status = e?.response?.status
+      const data = e?.response?.data
+      const msg = typeof data === 'string' ? data : data ? JSON.stringify(data) : ''
+      setBookingsErr(`${status ? `HTTP ${status}: ` : ''}${msg || 'Failed to load bookings'}`)
     } finally {
       setBookingsLoading(false)
     }
@@ -866,11 +1169,18 @@ export default function OwnerDashboard() {
     setOrdersErr('')
     setOrdersLoading(true)
     try {
-      const res = await listOwnerOrders(ownerUsername)
+      if (selectedCafeId == null) {
+        setOrders([])
+        setOrdersErr('Select a cafe first')
+        return
+      }
+      const res = await listOwnerOrders(ownerUsername, selectedCafeId)
       setOrders(Array.isArray(res) ? res : [])
     } catch (e) {
-      const msg = e?.response?.data
-      setOrdersErr(typeof msg === 'string' ? msg : 'Failed to load orders')
+      const status = e?.response?.status
+      const data = e?.response?.data
+      const msg = typeof data === 'string' ? data : data ? JSON.stringify(data) : ''
+      setOrdersErr(`${status ? `HTTP ${status}: ` : ''}${msg || 'Failed to load orders'}`)
     } finally {
       setOrdersLoading(false)
     }
@@ -879,7 +1189,9 @@ export default function OwnerDashboard() {
   useEffect(() => {
     if (!ownerUsername) return
     ;(async () => {
-      const ok = await refreshCafe()
+      const rows = await refreshCafes()
+      const resolved = (selectedCafeId != null ? selectedCafeId : (rows?.[0]?.id ?? null))
+      const ok = await refreshCafeWithId(resolved)
       if (ok) {
         await refreshStaff()
         await refreshMenu()
@@ -887,9 +1199,396 @@ export default function OwnerDashboard() {
         await refreshImages()
         await refreshBookings()
         await refreshOrders()
+        await refreshAmenities()
       }
     })()
-  }, [ownerUsername])
+  }, [ownerUsername, selectedCafeId])
+
+  function onAddCafe() {
+    setCafeErr('')
+    setCafeMsg('')
+    setAddCafeOpen(true)
+    setAddCafeStep(0)
+    setAddCafeDraft({
+      cafeName: '',
+      active: true,
+      ownerNames: '',
+      pocDesignation: '',
+      description: '',
+      phone: '',
+      email: '',
+      whatsappNumber: '',
+      addressLine: '',
+      city: '',
+      state: '',
+      pincode: '',
+      openingTime: '',
+      closingTime: '',
+      fssaiNumber: '',
+      panNumber: '',
+      gstin: '',
+      shopLicenseNumber: '',
+      bankAccountNumber: '',
+      bankIfsc: '',
+      bankAccountHolderName: ''
+    })
+  }
+
+  function closeAddCafe() {
+    setAddCafeOpen(false)
+  }
+
+  function RevenueSection() {
+    const summary = ownerAnalyticsDetails?.summary || ownerAnalyticsSummary || null
+
+    const busyHours = Array.isArray(ownerAnalyticsDetails?.busyHours) ? ownerAnalyticsDetails.busyHours : []
+    const busyHoursTop = busyHours
+      .filter((h) => h && h.hour != null)
+      .slice(0, 8)
+      .map((h) => ({
+        hour: Number(h.hour),
+        revenue: Number(h.orderRevenue ?? 0),
+        count: Number(h.orderCount ?? 0)
+      }))
+
+    const busyMax = Math.max(1, ...busyHoursTop.map((h) => h.revenue || 0))
+
+    const topItems = Array.isArray(ownerAnalyticsDetails?.topItems) ? ownerAnalyticsDetails.topItems : []
+    const topItemsTop = topItems
+      .filter((i) => i && i.itemName)
+      .slice(0, 5)
+      .map((i) => ({
+        name: String(i.itemName),
+        revenue: Number(i.totalRevenue ?? 0)
+      }))
+
+    const totalTopItemRevenue = topItemsTop.reduce((s, i) => s + (i.revenue || 0), 0)
+    const pieColors = ['#059669', '#0ea5e9', '#a855f7', '#f59e0b', '#ef4444']
+
+    function polarToCartesian(cx, cy, r, angleDeg) {
+      const a = ((angleDeg - 90) * Math.PI) / 180.0
+      return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }
+    }
+
+    function arcPath(cx, cy, r, startAngle, endAngle) {
+      const start = polarToCartesian(cx, cy, r, endAngle)
+      const end = polarToCartesian(cx, cy, r, startAngle)
+      const largeArc = endAngle - startAngle <= 180 ? 0 : 1
+      return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y} Z`
+    }
+
+    let pieStart = 0
+    const pieSlices = totalTopItemRevenue > 0
+      ? topItemsTop.map((i) => {
+          const pct = (i.revenue || 0) / totalTopItemRevenue
+          const sweep = pct * 360
+          const s = { ...i, start: pieStart, end: pieStart + sweep }
+          pieStart += sweep
+          return s
+        })
+      : []
+
+    return (
+      <div className="mt-6 rounded-2xl border border-black/10 bg-white/70 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold">Revenue</div>
+            <div className="mt-1 text-xs text-slate-600">Your cafe earnings overview.</div>
+          </div>
+          <button
+            type="button"
+            className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm"
+            onClick={() => setRevRefreshTick((t) => t + 1)}
+            disabled={revLoading}
+          >
+            Refresh
+          </button>
+        </div>
+
+        {revErr ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{revErr}</div> : null}
+        {revLoading ? <div className="mt-4 text-sm text-slate-600">Loading...</div> : null}
+
+        {summary ? (
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <div className="rounded-2xl border border-black/10 bg-white p-5">
+              <div className="text-xs font-semibold uppercase text-slate-500">Orders</div>
+              <div className="mt-1 text-2xl font-extrabold">{summary?.totalOrders ?? 0}</div>
+            </div>
+            <div className="rounded-2xl border border-black/10 bg-white p-5">
+              <div className="text-xs font-semibold uppercase text-slate-500">Bookings</div>
+              <div className="mt-1 text-2xl font-extrabold">{summary?.totalBookings ?? 0}</div>
+            </div>
+            <div className="rounded-2xl border border-black/10 bg-white p-5">
+              <div className="text-xs font-semibold uppercase text-slate-500">Order Revenue</div>
+              <div className="mt-1 text-2xl font-extrabold">₹{Number(summary?.totalOrderRevenue ?? 0).toFixed(2)}</div>
+            </div>
+          </div>
+        ) : (
+          !revLoading ? <div className="mt-4 text-sm text-slate-600">No revenue data yet.</div> : null
+        )}
+
+        {summary ? (
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-black/10 bg-white p-5">
+              <div className="text-sm font-semibold">Busy hours (revenue)</div>
+              <div className="mt-1 text-xs text-slate-600">Top hours by order revenue</div>
+              {busyHoursTop.length === 0 ? (
+                <div className="mt-4 text-sm text-slate-600">No hourly data yet.</div>
+              ) : (
+                <div className="mt-4">
+                  <div className="flex items-end gap-2">
+                    {busyHoursTop.map((h) => {
+                      const height = Math.max(6, Math.round((h.revenue / busyMax) * 140))
+                      return (
+                        <div key={h.hour} className="flex w-10 flex-col items-center gap-2">
+                          <div
+                            className="w-full rounded-lg bg-emerald-600/80"
+                            style={{ height: `${height}px` }}
+                            title={`Hour ${h.hour}: ₹${h.revenue.toFixed(0)} (${h.count} orders)`}
+                          />
+                          <div className="text-[11px] font-semibold text-slate-700">{String(h.hour).padStart(2, '0')}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-black/10 bg-white p-5">
+              <div className="text-sm font-semibold">Top items (revenue share)</div>
+              <div className="mt-1 text-xs text-slate-600">Revenue split among best sellers</div>
+              {pieSlices.length === 0 ? (
+                <div className="mt-4 text-sm text-slate-600">No item revenue data yet.</div>
+              ) : (
+                <div className="mt-4 flex flex-wrap items-center gap-6">
+                  <svg width="180" height="180" viewBox="0 0 180 180" className="shrink-0">
+                    {pieSlices.map((s, idx) => (
+                      <path key={s.name} d={arcPath(90, 90, 80, s.start, s.end)} fill={pieColors[idx % pieColors.length]} />
+                    ))}
+                    <circle cx="90" cy="90" r="45" fill="white" />
+                    <text x="90" y="90" textAnchor="middle" dominantBaseline="middle" className="fill-slate-900" style={{ fontSize: 12, fontWeight: 700 }}>
+                      ₹{totalTopItemRevenue.toFixed(0)}
+                    </text>
+                    <text x="90" y="108" textAnchor="middle" dominantBaseline="middle" className="fill-slate-500" style={{ fontSize: 10 }}>
+                      top items
+                    </text>
+                  </svg>
+
+                  <div className="grid gap-2">
+                    {pieSlices.map((s, idx) => {
+                      const pct = ((s.revenue || 0) / totalTopItemRevenue) * 100
+                      return (
+                        <div key={s.name} className="flex items-center gap-2 text-sm">
+                          <span className="h-3 w-3 rounded-sm" style={{ background: pieColors[idx % pieColors.length] }} />
+                          <div className="max-w-[260px] truncate text-slate-800" title={s.name}>{s.name}</div>
+                          <div className="ml-auto font-semibold text-slate-900">{pct.toFixed(0)}%</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
+  function MenuSection() {
+    return (
+      <div className="mt-6 grid gap-4">
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold">Menu</div>
+              <div className="mt-1 text-xs text-slate-600">Manage your menu items.</div>
+            </div>
+            <button
+              type="button"
+              className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm"
+              onClick={refreshMenu}
+              disabled={menuLoading}
+            >
+              Refresh
+            </button>
+          </div>
+
+          {menuErr ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{menuErr}</div> : null}
+          {menuMsg ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{menuMsg}</div> : null}
+
+          <div className="mt-5 grid gap-4 md:grid-cols-4">
+            <Field label="Name">
+              <input className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm" value={newMenuName} onChange={(e) => setNewMenuName(e.target.value)} />
+            </Field>
+            <Field label="Price">
+              <input className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm" value={newMenuPrice} onChange={(e) => setNewMenuPrice(e.target.value)} />
+            </Field>
+            <Field label="Category">
+              <input className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm" value={newMenuCategory} onChange={(e) => setNewMenuCategory(e.target.value)} />
+            </Field>
+            <div className="flex items-end">
+              <button type="button" className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" onClick={onCreateMenuItem} disabled={menuLoading}>
+                Add
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <Field label="Description">
+              <textarea className="min-h-[80px] w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm" value={newMenuDescription} onChange={(e) => setNewMenuDescription(e.target.value)} />
+            </Field>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <Field label="Available">
+              <select className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm" value={String(newMenuAvailable)} onChange={(e) => setNewMenuAvailable(e.target.value === 'true')}>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </Field>
+            <Field label="Image">
+              <input type="file" accept="image/*" className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm" onChange={(e) => setNewMenuImageFile(e.target.files?.[0] || null)} />
+            </Field>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-6">
+          <div className="text-sm font-semibold">Menu items</div>
+          {menuLoading ? <div className="mt-4 text-sm text-slate-600">Loading...</div> : null}
+          {!menuLoading && (Array.isArray(menu) && menu.length > 0 ? (
+            <div className="mt-4 grid gap-3">
+              {menu.map((m) => (
+                <div key={m.id} className="rounded-2xl border border-black/10 bg-white/70 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-slate-900">{m.name}</div>
+                      <div className="mt-1 text-xs text-slate-600">₹{m.price} • {m.category || '-'} • {m.available ? 'Available' : 'Unavailable'}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold"
+                        onClick={async () => {
+                          setMenuErr('')
+                          try {
+                            await updateOwnerMenuAvailability(ownerUsername, selectedCafeId, m.id, !m.available)
+                            await refreshMenu()
+                          } catch (e) {
+                            const msg = e?.response?.data
+                            setMenuErr(typeof msg === 'string' ? msg : 'Failed to update availability')
+                          }
+                        }}
+                        disabled={menuLoading}
+                      >
+                        Toggle
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
+                        onClick={() => onDeleteMenuItem(m.id)}
+                        disabled={menuLoading}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 text-sm text-slate-600">No menu items yet.</div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  function CapacitiesSection() {
+    return (
+      <div className="mt-6 grid gap-4">
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold">Tables/Functions</div>
+              <div className="mt-1 text-xs text-slate-600">Configure tables & seating by function type.</div>
+            </div>
+            <button type="button" className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm" onClick={refreshCapacities} disabled={capLoading}>
+              Refresh
+            </button>
+          </div>
+
+          {capErr ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{capErr}</div> : null}
+          {capMsg ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{capMsg}</div> : null}
+
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <Field label="Function type">
+              <select className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm" value={capType} onChange={(e) => setCapType(e.target.value)}>
+                <option value="DINE_IN">DINE_IN</option>
+                <option value="BIRTHDAY">BIRTHDAY</option>
+                <option value="ANNIVERSARY">ANNIVERSARY</option>
+              </select>
+            </Field>
+            <Field label="Tables available">
+              <input className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm" value={capTables} onChange={(e) => setCapTables(e.target.value)} />
+            </Field>
+            <Field label="Table labels (comma separated)">
+              <input className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm" value={capTableLabels} onChange={(e) => setCapTableLabels(e.target.value)} />
+            </Field>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-4">
+            <Field label="Seats/table">
+              <input className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm" value={capSeatsPerTable} onChange={(e) => setCapSeatsPerTable(e.target.value)} />
+            </Field>
+            <Field label="Seats available">
+              <input className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm" value={capSeats} onChange={(e) => setCapSeats(e.target.value)} />
+            </Field>
+            <Field label="Price">
+              <input className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm" value={capPrice} onChange={(e) => setCapPrice(e.target.value)} />
+            </Field>
+            <Field label="Enabled">
+              <select className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm" value={String(capEnabled)} onChange={(e) => setCapEnabled(e.target.value === 'true')}>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </Field>
+          </div>
+
+          <div className="mt-4">
+            <button type="button" className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" onClick={onUpsertCapacity} disabled={capLoading}>
+              Save
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-6">
+          <div className="text-sm font-semibold">Configured capacities</div>
+          {capLoading ? <div className="mt-4 text-sm text-slate-600">Loading...</div> : null}
+          {!capLoading && (Array.isArray(capacities) && capacities.length > 0 ? (
+            <div className="mt-4 grid gap-3">
+              {capacities.map((c) => (
+                <div key={c.id} className="rounded-2xl border border-black/10 bg-white/70 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm text-slate-900">
+                      <div className="font-semibold">{c.functionType}</div>
+                      <div className="mt-1 text-xs text-slate-600">Tables: {c.tablesAvailable} • Labels: {c.tableLabels || '-'} • Enabled: {c.enabled ? 'Yes' : 'No'}</div>
+                    </div>
+                    <button type="button" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700" onClick={() => onDeleteCapacity(c.id)}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 text-sm text-slate-600">No capacities yet.</div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   useEffect(() => {
     if (!ownerUsername) return
@@ -1033,7 +1732,7 @@ export default function OwnerDashboard() {
                             onClick={async () => {
                               setBookingsErr('')
                               try {
-                                await approveOwnerBooking(ownerUsername, b.id)
+                                await approveOwnerBooking(ownerUsername, selectedCafeId, b.id)
                                 await refreshBookings()
                               } catch (e) {
                                 const msg = e?.response?.data
@@ -1077,7 +1776,7 @@ export default function OwnerDashboard() {
                               if (!window.confirm('Delete this booking request?')) return
                               setBookingsErr('')
                               try {
-                                await deleteOwnerBooking(ownerUsername, b.id)
+                                await deleteOwnerBooking(ownerUsername, selectedCafeId, b.id)
                                 await refreshBookings()
                               } catch (e) {
                                 const msg = e?.response?.data
@@ -1177,9 +1876,9 @@ export default function OwnerDashboard() {
                     setDenyBusy(true)
                     try {
                       if (denyRefund) {
-                        await denyOwnerBookingWithRefund(ownerUsername, denyBookingId, { reason: denyReason })
+                        await denyOwnerBookingWithRefund(ownerUsername, selectedCafeId, denyBookingId, { reason: denyReason })
                       } else {
-                        await denyOwnerBooking(ownerUsername, denyBookingId, { reason: denyReason })
+                        await denyOwnerBooking(ownerUsername, selectedCafeId, denyBookingId, { reason: denyReason })
                       }
                       setDenyOpen(false)
                       setDenyBookingId(null)
@@ -1307,7 +2006,7 @@ export default function OwnerDashboard() {
                         if (!window.confirm('Delete this order?')) return
                         setOrdersErr('')
                         try {
-                          await deleteOwnerOrder(ownerUsername, o.id)
+                          await deleteOwnerOrder(ownerUsername, selectedCafeId, o.id)
                           await refreshOrders()
                         } catch (e) {
                           const msg = e?.response?.data
@@ -1372,7 +2071,7 @@ export default function OwnerDashboard() {
     }
     setMenuLoading(true)
     try {
-      const created = await createOwnerMenuItem(ownerUsername, {
+      const created = await createOwnerMenuItem(ownerUsername, selectedCafeId, {
         name,
         price: priceNum,
         category: newMenuCategory.trim() || null,
@@ -1383,7 +2082,7 @@ export default function OwnerDashboard() {
       let imageFailed = false
       if (newMenuImageFile && created?.id) {
         try {
-          await uploadOwnerMenuItemImage(ownerUsername, created.id, newMenuImageFile)
+          await uploadOwnerMenuItemImage(ownerUsername, selectedCafeId, created.id, newMenuImageFile)
         } catch (e) {
           imageFailed = true
         }
@@ -1411,7 +2110,7 @@ export default function OwnerDashboard() {
     setMenuMsg('')
     setMenuLoading(true)
     try {
-      await uploadOwnerMenuItemImage(ownerUsername, item.id, file)
+      await uploadOwnerMenuItemImage(ownerUsername, selectedCafeId, item.id, file)
       setMenuMsg('Image uploaded')
       await refreshMenu()
     } catch (e) {
@@ -1428,29 +2127,12 @@ export default function OwnerDashboard() {
     setMenuMsg('')
     setMenuLoading(true)
     try {
-      await deleteOwnerMenuItem(ownerUsername, id)
+      await deleteOwnerMenuItem(ownerUsername, selectedCafeId, id)
       setMenuMsg('Deleted')
       await refreshMenu()
     } catch (e) {
       const msg = e?.response?.data
       setMenuErr(typeof msg === 'string' ? msg : 'Failed to delete menu item')
-    } finally {
-      setMenuLoading(false)
-    }
-  }
-
-  async function onToggleMenuAvailability(item) {
-    if (!item?.id) return
-    setMenuErr('')
-    setMenuMsg('')
-    setMenuLoading(true)
-    try {
-      await updateOwnerMenuAvailability(ownerUsername, item.id, !item.available)
-      setMenuMsg('Updated')
-      await refreshMenu()
-    } catch (e) {
-      const msg = e?.response?.data
-      setMenuErr(typeof msg === 'string' ? msg : 'Failed to update availability')
     } finally {
       setMenuLoading(false)
     }
@@ -1481,7 +2163,7 @@ export default function OwnerDashboard() {
     }
     setCapLoading(true)
     try {
-      await upsertOwnerCapacity(ownerUsername, {
+      await upsertOwnerCapacity(ownerUsername, selectedCafeId, {
         functionType: capType,
         tablesAvailable: tablesNum,
         tableLabels: String(capTableLabels || '').trim() || null,
@@ -1506,7 +2188,7 @@ export default function OwnerDashboard() {
     setCapMsg('')
     setCapLoading(true)
     try {
-      await deleteOwnerCapacity(ownerUsername, id)
+      await deleteOwnerCapacity(ownerUsername, selectedCafeId, id)
       setCapMsg('Deleted')
       await refreshCapacities()
     } catch (e) {
@@ -1526,7 +2208,7 @@ export default function OwnerDashboard() {
     }
     setImgLoading(true)
     try {
-      await uploadOwnerImage(ownerUsername, uploadFile, uploadCover)
+      await uploadOwnerImage(ownerUsername, selectedCafeId, uploadFile, uploadCover)
       setUploadFile(null)
       setUploadCover(false)
       setImgMsg('Uploaded')
@@ -1545,7 +2227,7 @@ export default function OwnerDashboard() {
     setImgMsg('')
     setImgLoading(true)
     try {
-      await deleteOwnerImage(ownerUsername, id)
+      await deleteOwnerImage(ownerUsername, selectedCafeId, id)
       setImgMsg('Deleted')
       await refreshImages()
     } catch (e) {
@@ -1554,128 +2236,6 @@ export default function OwnerDashboard() {
     } finally {
       setImgLoading(false)
     }
-  }
-
-  const canSaveCafe = useMemo(() => {
-    return !!(cafe?.cafeName && String(cafe.cafeName).trim().length >= 2)
-  }, [cafe])
-
-  const canGoNextCafe = useMemo(() => {
-    if (cafeStep === 0) {
-      return !!(cafe?.cafeName && String(cafe.cafeName).trim().length >= 2)
-    }
-    if (cafeStep === 1) {
-      return true
-    }
-    if (cafeStep === 2) {
-      return true
-    }
-    return true
-  }, [cafeStep, cafe])
-
-  const canSubmitCafe = useMemo(() => {
-    return !!(cafe?.cafeName && String(cafe.cafeName).trim().length >= 2)
-  }, [cafe])
-
-  const canCreateStaff = useMemo(() => {
-    return (
-      String(newStaffRole || '').trim().length > 0 &&
-      String(newStaffFirstName || '').trim().length > 0 &&
-      String(newStaffLastName || '').trim().length > 0 &&
-      String(newStaffEmail || '').trim().length > 0 &&
-      String(newStaffPhone || '').trim().length > 0 &&
-      String(newStaffStreet || '').trim().length > 0 &&
-      String(newStaffCity || '').trim().length > 0 &&
-      String(newStaffState || '').trim().length > 0 &&
-      String(newStaffPincode || '').trim().length > 0 &&
-      Array.isArray(newStaffDocuments) &&
-      newStaffDocuments.length > 0
-    )
-  }, [
-    newStaffRole,
-    newStaffFirstName,
-    newStaffLastName,
-    newStaffEmail,
-    newStaffPhone,
-    newStaffStreet,
-    newStaffCity,
-    newStaffState,
-    newStaffPincode,
-    newStaffDocuments
-  ])
-
-  const canGoNextStaff = useMemo(() => {
-    if (newStaffStep === 0) {
-      return (
-        String(newStaffRole || '').trim().length > 0 &&
-        String(newStaffFirstName || '').trim().length > 0 &&
-        String(newStaffLastName || '').trim().length > 0 &&
-        String(newStaffEmail || '').trim().length > 0
-      )
-    }
-    if (newStaffStep === 1) {
-      return (
-        String(newStaffStreet || '').trim().length > 0 &&
-        String(newStaffCity || '').trim().length > 0 &&
-        String(newStaffState || '').trim().length > 0 &&
-        String(newStaffPincode || '').trim().length > 0
-      )
-    }
-    if (newStaffStep === 2) return true
-    if (newStaffStep === 3) return true
-    if (newStaffStep === 4) {
-      return Array.isArray(newStaffDocuments) && newStaffDocuments.length > 0
-    }
-    return false
-  }, [
-    newStaffStep,
-    newStaffRole,
-    newStaffFirstName,
-    newStaffLastName,
-    newStaffEmail,
-    newStaffStreet,
-    newStaffCity,
-    newStaffState,
-    newStaffPincode,
-    newStaffDocuments
-  ])
-
-  function updateStaffAcademic(idx, key, value) {
-    setNewStaffAcademicInfoList((prev) => prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)))
-  }
-
-  function addStaffAcademic() {
-    setNewStaffAcademicInfoList((prev) => [
-      ...prev,
-      { institutionName: '', degree: '', passingYear: '', grade: '', gradeInPercentage: '' }
-    ])
-  }
-
-  function removeStaffAcademic(idx) {
-    setNewStaffAcademicInfoList((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)))
-  }
-
-  function updateStaffWork(idx, key, value) {
-    setNewStaffWorkExperienceList((prev) => prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)))
-  }
-
-  function addStaffWork() {
-    setNewStaffWorkExperienceList((prev) => [
-      ...prev,
-      {
-        startDate: '',
-        endDate: '',
-        currentlyWorking: false,
-        companyName: '',
-        designation: '',
-        ctc: '',
-        reasonForLeaving: ''
-      }
-    ])
-  }
-
-  function removeStaffWork(idx) {
-    setNewStaffWorkExperienceList((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)))
   }
 
   async function onCreateStaff() {
@@ -1737,7 +2297,7 @@ export default function OwnerDashboard() {
         workExperienceList: cleanedWork
       }
 
-      const res = await createOwnerStaff(ownerUsername, payload, newStaffDocuments)
+      const res = await createOwnerStaff(ownerUsername, selectedCafeId, payload, newStaffDocuments)
       setStaffMsg(typeof res === 'string' ? res : 'Staff created')
       setNewStaffFirstName('')
       setNewStaffLastName('')
@@ -1778,7 +2338,7 @@ export default function OwnerDashboard() {
     setStaffMsg('')
     setStaffLoading(true)
     try {
-      const res = await deleteOwnerStaff(ownerUsername, id)
+      const res = await deleteOwnerStaff(ownerUsername, selectedCafeId, id)
       setStaffMsg(typeof res === 'string' ? res : 'Deleted')
       await refreshStaff()
     } catch (e) {
@@ -1789,747 +2349,83 @@ export default function OwnerDashboard() {
     }
   }
 
-  function TabButton({ k, label, disabled }) {
-    const active = tab === k
-    return (
-      <button
-        type="button"
-        onClick={() => {
-          if (!disabled) setTab(k)
-        }}
-        disabled={disabled}
-        className={
-          active
-            ? 'rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500'
-            : disabled
-              ? 'rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm text-slate-400 opacity-60'
-              : 'rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm text-slate-700 hover:bg-white'
-        }
-      >
-        {label}
-      </button>
-    )
+  async function onUpsertAmenity() {
+    setAmenityErr('')
+    setAmenityMsg('')
+    const name = String(amenityName || '').trim()
+    if (!name) {
+      setAmenityErr('Amenity name is required')
+      return
+    }
+    setAmenityLoading(true)
+    try {
+      await createOwnerAmenity(ownerUsername, selectedCafeId, {
+        name,
+        functionType: amenityFunctionType || null,
+        enabled: !!amenityEnabled
+      })
+      setAmenityMsg('Created')
+      setAmenityName('')
+      setAmenityEnabled(true)
+      await refreshAmenities()
+    } catch (e) {
+      const msg = e?.response?.data
+      setAmenityErr(typeof msg === 'string' ? msg : 'Failed to create amenity')
+    } finally {
+      setAmenityLoading(false)
+    }
   }
 
-  function SidebarLogoutButton() {
-    return (
-      <button
-        type="button"
-        className="w-full rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-500/15"
-        onClick={() => {
-          clearSession()
-          window.location.href = '/login'
-        }}
-      >
-        Logout
-      </button>
-    )
+  async function onDeleteAmenity(id) {
+    if (!window.confirm('Delete this amenity?')) return
+    setAmenityErr('')
+    setAmenityMsg('')
+    setAmenityLoading(true)
+    try {
+      await deleteOwnerAmenity(ownerUsername, selectedCafeId, id)
+      setAmenityMsg('Deleted')
+      await refreshAmenities()
+    } catch (e) {
+      const msg = e?.response?.data
+      setAmenityErr(typeof msg === 'string' ? msg : 'Failed to delete amenity')
+    } finally {
+      setAmenityLoading(false)
+    }
   }
 
-  const sidebarItems = useMemo(() => {
-    const disabled = !hasCafe
-    return [
-      { key: 'myProfile', label: 'My Profile', disabled: false },
-      { key: 'profile', label: hasCafe ? 'Cafe Profile' : 'Register Cafe', disabled: false },
-      { key: 'staff', label: 'Staff', disabled },
-      { key: 'menu', label: 'Menu', disabled },
-      { key: 'capacities', label: 'Tables/Functions', disabled },
-      { key: 'images', label: 'Images', disabled },
-      { key: 'bookings', label: 'Bookings', disabled },
-      { key: 'orders', label: 'Orders', disabled }
-    ]
-  }, [hasCafe])
+  useEffect(() => {
+    if (!hasCafe) return
+    if (tab !== 'revenue') return
+    const ownerUsername = session?.username
+    if (!ownerUsername) return
 
-  function SidebarButton({ item }) {
-    const active = tab === item.key
-    return (
-      <button
-        type="button"
-        disabled={!!item.disabled}
-        onClick={() => {
-          if (item.disabled) return
-          if (item.key === 'myProfile') {
-            setTab('myProfile')
-            return
-          }
-          setTab(item.key)
-        }}
-        className={
-          item.disabled
-            ? 'rounded-lg px-3 py-2 text-left text-sm text-slate-400 opacity-60'
-            : active
-              ? 'rounded-lg bg-emerald-600/15 px-3 py-2 text-left text-sm font-semibold text-emerald-800'
-              : 'rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-white'
-        }
-      >
-        {item.label}
-      </button>
-    )
-  }
-
-  function MenuSection() {
-    return (
-      <div className="mt-6 grid gap-4">
-        <div className="rounded-2xl border border-black/10 bg-white/70 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold">Menu</div>
-              <div className="mt-1 text-xs text-slate-600">Add items visible to customers.</div>
-            </div>
-            <button
-              type="button"
-              className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm"
-              onClick={() => refreshMenu()}
-              disabled={menuLoading}
-            >
-              Refresh
-            </button>
-          </div>
-
-          {menuErr ? <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{menuErr}</div> : null}
-          {menuMsg ? <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{menuMsg}</div> : null}
-
-          <div className="mt-5 grid gap-4 md:grid-cols-5">
-            <Field label="Name *">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={newMenuName}
-                onChange={(e) => setNewMenuName(e.target.value)}
-              />
-            </Field>
-            <Field label="Price *">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={newMenuPrice}
-                onChange={(e) => setNewMenuPrice(e.target.value)}
-                placeholder="199"
-              />
-            </Field>
-            <Field label="Category">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={newMenuCategory}
-                onChange={(e) => setNewMenuCategory(e.target.value)}
-                placeholder="Beverages"
-              />
-            </Field>
-            <Field label="Available">
-              <select
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={String(newMenuAvailable)}
-                onChange={(e) => setNewMenuAvailable(e.target.value === 'true')}
-              >
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-            </Field>
-            <div className="flex items-end">
-              <button
-                type="button"
-                className="w-full rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 disabled:opacity-60"
-                onClick={onCreateMenuItem}
-                disabled={menuLoading}
-              >
-                Add
-              </button>
-            </div>
-            <div className="md:col-span-5">
-              <Field label="Description">
-                <input
-                  className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                  value={newMenuDescription}
-                  onChange={(e) => setNewMenuDescription(e.target.value)}
-                  placeholder="Optional"
-                />
-              </Field>
-            </div>
-            <div className="md:col-span-5">
-              <Field label="Image (optional)">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                  onChange={(e) => setNewMenuImageFile(e.target.files?.[0] || null)}
-                />
-              </Field>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-black/10 bg-white/70">
-          <div className="border-b border-black/10 p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold">Items</div>
-                <div className="mt-1 text-xs text-slate-600">Current menu items.</div>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2 text-sm text-slate-700">
-                  <span>Show</span>
-                  <select
-                    value={menuPageSize}
-                    onChange={(e) => {
-                      setMenuPageSize(Number(e.target.value) || 10)
-                      setMenuPage(1)
-                    }}
-                    className="rounded-lg border border-black/10 bg-white px-2 py-1"
-                  >
-                    <option value={10}>10</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                  </select>
-                  <span>entries</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-slate-700">
-                  <span>Search:</span>
-                  <input
-                    value={menuQ}
-                    onChange={(e) => {
-                      setMenuQ(e.target.value)
-                      setMenuPage(1)
-                    }}
-                    className="w-56 rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
-                    placeholder="name / category"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] text-left text-sm">
-              <thead className="bg-white/70 text-xs font-semibold uppercase text-slate-500">
-                <tr>
-                  <th className="px-5 py-3">Image</th>
-                  <th className="px-5 py-3">Name</th>
-                  <th className="px-5 py-3">Category</th>
-                  <th className="px-5 py-3">Price</th>
-                  <th className="px-5 py-3">Available</th>
-                  <th className="px-5 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/5">
-                {filteredMenu.length === 0 ? (
-                  <tr>
-                    <td className="px-5 py-6 text-slate-600" colSpan={6}>
-                      No items yet.
-                    </td>
-                  </tr>
-                ) : (
-                  pagedMenu.map((m) => (
-                    <tr key={m.id} className="hover:bg-black/5">
-                      <td className="px-5 py-3">
-                        {m.imageUrl ? (
-                          <a href={m.imageUrl} target="_blank" rel="noreferrer">
-                            <img src={m.imageUrl} alt={m.name} className="h-10 w-10 rounded-lg object-cover" />
-                          </a>
-                        ) : (
-                          <div className="h-10 w-10 rounded-lg border border-black/10 bg-white" />
-                        )}
-                      </td>
-                      <td className="px-5 py-3 font-semibold text-slate-900">
-                        {m.imageUrl ? (
-                          <a href={m.imageUrl} target="_blank" rel="noreferrer" className="hover:underline">
-                            {m.name}
-                          </a>
-                        ) : (
-                          m.name
-                        )}
-                      </td>
-                      <td className="px-5 py-3 text-slate-600">{m.category || '-'}</td>
-                      <td className="px-5 py-3 text-slate-900">{m.price}</td>
-                      <td className="px-5 py-3">
-                        <button
-                          type="button"
-                          disabled={menuLoading}
-                          onClick={() => onToggleMenuAvailability(m)}
-                          className={
-                            m.available
-                              ? 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-500/15 disabled:opacity-60'
-                              : 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60'
-                          }
-                        >
-                          {m.available ? 'Available' : 'Unavailable'}
-                        </button>
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <label className="rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white">
-                            Upload image
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              disabled={menuLoading}
-                              onChange={(e) => {
-                                const f = e.target.files?.[0] || null
-                                e.target.value = ''
-                                if (f) onUploadMenuImage(m, f)
-                              }}
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/15"
-                            onClick={() => onDeleteMenuItem(m.id)}
-                            disabled={menuLoading}
-                            aria-label="Delete menu item"
-                            title="Delete"
-                          >
-                            <TrashIcon className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-
-            {filteredMenu.length > 0 ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/10 p-4 text-sm text-slate-700">
-                <div>
-                  Showing {(Math.min(Math.max(1, menuPage), menuTotalPages) - 1) * (Number(menuPageSize) || 10) + 1} to{' '}
-                  {Math.min(Math.min(Math.max(1, menuPage), menuTotalPages) * (Number(menuPageSize) || 10), filteredMenu.length)} of {filteredMenu.length} entries
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
-                    onClick={() => setMenuPage((p) => Math.max(1, p - 1))}
-                    disabled={menuPage <= 1}
-                  >
-                    Prev
-                  </button>
-                  <div className="text-xs">
-                    Page {Math.min(Math.max(1, menuPage), menuTotalPages)} of {menuTotalPages}
-                  </div>
-                  <button
-                    type="button"
-                    className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
-                    onClick={() => setMenuPage((p) => Math.min(menuTotalPages, p + 1))}
-                    disabled={menuPage >= menuTotalPages}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  function CapacitiesSection() {
-    return (
-      <div className="mt-6 grid gap-4">
-        <div className="rounded-2xl border border-black/10 bg-white/70 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold">Tables / Functions</div>
-              <div className="mt-1 text-xs text-slate-600">Set tables availability for each function type.</div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm"
-                onClick={() => refreshCapacities()}
-                disabled={capLoading}
-              >
-                Refresh
-              </button>
-              <button
-                type="button"
-                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
-                onClick={onUpsertCapacity}
-                disabled={capLoading}
-              >
-                Save
-              </button>
-            </div>
-          </div>
-
-          {capErr ? <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{capErr}</div> : null}
-          {capMsg ? <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{capMsg}</div> : null}
-
-          <div className="mt-5 grid gap-4 md:grid-cols-5">
-            <Field label="Function type">
-              <select
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={capType}
-                onChange={(e) => setCapType(e.target.value)}
-              >
-                <option value="DINE_IN">DINE_IN</option>
-                <option value="BIRTHDAY">BIRTHDAY</option>
-                <option value="CORPORATE">CORPORATE</option>
-              </select>
-            </Field>
-            <Field label="Tables available *">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={capTables}
-                onChange={(e) => setCapTables(e.target.value)}
-                placeholder="10"
-              />
-            </Field>
-            <Field label="Seats per table" className="md:col-span-1">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={capSeatsPerTable}
-                onChange={(e) => setCapSeatsPerTable(e.target.value)}
-                placeholder="4"
-              />
-            </Field>
-            <Field label="Table labels" className="md:col-span-3">
-              <div className="flex gap-2">
-                <input
-                  className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                  value={capTableLabels}
-                  onChange={(e) => setCapTableLabels(e.target.value)}
-                  placeholder="Generate or enter labels"
-                />
-                <button
-                  type="button"
-                  className="whitespace-nowrap rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white disabled:opacity-60"
-                  disabled={capLoading}
-                  onClick={() => {
-                    const n = Number(capTables) || 0
-                    if (n <= 0) {
-                      setCapErr('Tables available must be greater than 0 to generate labels')
-                      return
-                    }
-                    const labels = Array.from({ length: n }, (_, i) => `T${i + 1}`).join(', ')
-                    setCapTableLabels(labels)
-                  }}
-                >
-                  Generate
-                </button>
-              </div>
-            </Field>
-            <Field label="Seats available">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={capSeats}
-                onChange={(e) => setCapSeats(e.target.value)}
-                placeholder="50"
-              />
-            </Field>
-            <Field label="Price">
-              <input
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={capPrice}
-                onChange={(e) => setCapPrice(e.target.value)}
-                placeholder="Optional"
-              />
-            </Field>
-            <Field label="Enabled">
-              <select
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={String(capEnabled)}
-                onChange={(e) => setCapEnabled(e.target.value === 'true')}
-              >
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-            </Field>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-black/10 bg-white/70 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold">Amenities</div>
-              <div className="mt-1 text-xs text-slate-600">Create amenities customers can select during booking/order.</div>
-            </div>
-            <button
-              type="button"
-              className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm"
-              onClick={() => refreshAmenities()}
-              disabled={amenityLoading}
-            >
-              Refresh
-            </button>
-          </div>
-
-          {amenityErr ? <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{amenityErr}</div> : null}
-          {amenityMsg ? <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{amenityMsg}</div> : null}
-
-          <div className="mt-5 grid gap-4 md:grid-cols-5">
-            <Field label="Name *" className="md:col-span-2">
-              <input
-                className="w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={amenityName}
-                onChange={(e) => setAmenityName(e.target.value)}
-                placeholder="e.g. Window"
-              />
-            </Field>
-            <Field label="Function type (optional)">
-              <select
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={amenityFunctionType}
-                onChange={(e) => setAmenityFunctionType(e.target.value)}
-              >
-                <option value="">All</option>
-                <option value="DINE_IN">DINE_IN</option>
-                <option value="BIRTHDAY">BIRTHDAY</option>
-                <option value="CORPORATE">CORPORATE</option>
-              </select>
-            </Field>
-            <Field label="Enabled">
-              <select
-                className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm text-slate-900 outline-none"
-                value={String(amenityEnabled)}
-                onChange={(e) => setAmenityEnabled(e.target.value === 'true')}
-              >
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-            </Field>
-            <div className="flex items-end">
-              <button
-                type="button"
-                className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
-                disabled={amenityLoading}
-                onClick={async () => {
-                  setAmenityErr('')
-                  setAmenityMsg('')
-                  const name = String(amenityName || '').trim()
-                  if (!name) {
-                    setAmenityErr('Amenity name is required')
-                    return
-                  }
-                  setAmenityLoading(true)
-                  try {
-                    await createOwnerAmenity(ownerUsername, {
-                      name,
-                      functionType: amenityFunctionType || null,
-                      enabled: !!amenityEnabled
-                    })
-                    setAmenityName('')
-                    setAmenityFunctionType('')
-                    setAmenityEnabled(true)
-                    setAmenityMsg('Created')
-                    await refreshAmenities()
-                  } catch (e) {
-                    const msg = e?.response?.data
-                    setAmenityErr(typeof msg === 'string' ? msg : 'Failed to create amenity')
-                  } finally {
-                    setAmenityLoading(false)
-                  }
-                }}
-              >
-                Add
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-5 overflow-x-auto rounded-2xl border border-black/10 bg-white/70">
-            <table className="w-full min-w-[900px] text-left text-sm">
-              <thead className="bg-white/70 text-xs font-semibold uppercase text-slate-500">
-                <tr>
-                  <th className="px-5 py-3">Name</th>
-                  <th className="px-5 py-3">Function</th>
-                  <th className="px-5 py-3">Enabled</th>
-                  <th className="px-5 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/5">
-                {(Array.isArray(amenities) ? amenities : []).length === 0 ? (
-                  <tr>
-                    <td className="px-5 py-6 text-slate-600" colSpan={4}>
-                      No amenities yet.
-                    </td>
-                  </tr>
-                ) : (
-                  (Array.isArray(amenities) ? amenities : []).map((a) => (
-                    <tr key={a.id} className="hover:bg-black/5">
-                      <td className="px-5 py-3 font-semibold text-slate-900">{a.name}</td>
-                      <td className="px-5 py-3 text-slate-600">{a.functionType || 'All'}</td>
-                      <td className="px-5 py-3">
-                        <button
-                          type="button"
-                          className={
-                            a.enabled
-                              ? 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-500/15 disabled:opacity-60'
-                              : 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60'
-                          }
-                          disabled={amenityLoading}
-                          onClick={async () => {
-                            setAmenityErr('')
-                            setAmenityMsg('')
-                            setAmenityLoading(true)
-                            try {
-                              await updateOwnerAmenity(ownerUsername, a.id, {
-                                name: a.name,
-                                functionType: a.functionType || null,
-                                enabled: !a.enabled
-                              })
-                              await refreshAmenities()
-                            } catch (e) {
-                              const msg = e?.response?.data
-                              setAmenityErr(typeof msg === 'string' ? msg : 'Failed to update amenity')
-                            } finally {
-                              setAmenityLoading(false)
-                            }
-                          }}
-                        >
-                          {a.enabled ? 'Enabled' : 'Disabled'}
-                        </button>
-                      </td>
-                      <td className="px-5 py-3">
-                        <button
-                          type="button"
-                          className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/15 disabled:opacity-60"
-                          disabled={amenityLoading}
-                          onClick={async () => {
-                            if (!window.confirm('Delete this amenity?')) return
-                            setAmenityErr('')
-                            setAmenityMsg('')
-                            setAmenityLoading(true)
-                            try {
-                              await deleteOwnerAmenity(ownerUsername, a.id)
-                              setAmenityMsg('Deleted')
-                              await refreshAmenities()
-                            } catch (e) {
-                              const msg = e?.response?.data
-                              setAmenityErr(typeof msg === 'string' ? msg : 'Failed to delete amenity')
-                            } finally {
-                              setAmenityLoading(false)
-                            }
-                          }}
-                        >
-                          <TrashIcon className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-black/10 bg-white/70">
-          <div className="border-b border-black/10 p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold">Configured capacities</div>
-                <div className="mt-1 text-xs text-slate-600">Each function type can be configured once.</div>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2 text-sm text-slate-700">
-                  <span>Show</span>
-                  <select
-                    value={capPageSize}
-                    onChange={(e) => {
-                      setCapPageSize(Number(e.target.value) || 10)
-                      setCapPage(1)
-                    }}
-                    className="rounded-lg border border-black/10 bg-white px-2 py-1"
-                  >
-                    <option value={10}>10</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                  </select>
-                  <span>entries</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-slate-700">
-                  <span>Search:</span>
-                  <input
-                    value={capQ}
-                    onChange={(e) => {
-                      setCapQ(e.target.value)
-                      setCapPage(1)
-                    }}
-                    className="w-56 rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
-                    placeholder="function / tables / labels"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-sm">
-              <thead className="bg-white/70 text-xs font-semibold uppercase text-slate-500">
-                <tr>
-                  <th className="px-5 py-3">Function</th>
-                  <th className="px-5 py-3">Tables</th>
-                  <th className="px-5 py-3">Labels</th>
-                  <th className="px-5 py-3">Seats/Table</th>
-                  <th className="px-5 py-3">Seats</th>
-                  <th className="px-5 py-3">Price</th>
-                  <th className="px-5 py-3">Enabled</th>
-                  <th className="px-5 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/5">
-                {filteredCaps.length === 0 ? (
-                  <tr>
-                    <td className="px-5 py-6 text-slate-600" colSpan={8}>
-                      No capacities yet.
-                    </td>
-                  </tr>
-                ) : (
-                  pagedCaps.map((c) => (
-                    <tr key={c.id} className="hover:bg-black/5">
-                      <td className="px-5 py-3 font-semibold text-slate-900">{c.functionType}</td>
-                      <td className="px-5 py-3 text-slate-900">{c.tablesAvailable}</td>
-                      <td className="px-5 py-3 text-slate-600">{c.tableLabels || '-'}</td>
-                      <td className="px-5 py-3 text-slate-600">{c.seatsPerTable ?? '-'}</td>
-                      <td className="px-5 py-3 text-slate-600">{c.seatsAvailable ?? '-'}</td>
-                      <td className="px-5 py-3 text-slate-600">{c.price ?? '-'}</td>
-                      <td className="px-5 py-3 text-slate-600">{c.enabled ? 'Yes' : 'No'}</td>
-                      <td className="px-5 py-3">
-                        <button
-                          type="button"
-                          className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/15"
-                          onClick={() => onDeleteCapacity(c.id)}
-                          aria-label="Delete capacity"
-                          title="Delete"
-                        >
-                          <TrashIcon className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-
-            {filteredCaps.length > 0 ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/10 p-4 text-sm text-slate-700">
-                <div>
-                  Showing {(Math.min(Math.max(1, capPage), capTotalPages) - 1) * (Number(capPageSize) || 10) + 1} to{' '}
-                  {Math.min(Math.min(Math.max(1, capPage), capTotalPages) * (Number(capPageSize) || 10), filteredCaps.length)} of {filteredCaps.length} entries
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
-                    onClick={() => setCapPage((p) => Math.max(1, p - 1))}
-                    disabled={capPage <= 1}
-                  >
-                    Prev
-                  </button>
-                  <div className="text-xs">
-                    Page {Math.min(Math.max(1, capPage), capTotalPages)} of {capTotalPages}
-                  </div>
-                  <button
-                    type="button"
-                    className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
-                    onClick={() => setCapPage((p) => Math.min(capTotalPages, p + 1))}
-                    disabled={capPage >= capTotalPages}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    )
-  }
+    let alive = true
+    ;(async () => {
+      setRevErr('')
+      setRevLoading(true)
+      try {
+        const [s, d] = await Promise.all([
+          getOwnerAnalyticsSummary(ownerUsername, selectedCafeId),
+          getOwnerAnalyticsDetails(ownerUsername, selectedCafeId)
+        ])
+        if (!alive) return
+        setOwnerAnalyticsSummary(s || null)
+        setOwnerAnalyticsDetails(d || null)
+      } catch (e) {
+        if (!alive) return
+        const msg = e?.response?.data
+        setRevErr(typeof msg === 'string' ? msg : 'Failed to load revenue')
+        setOwnerAnalyticsSummary(null)
+        setOwnerAnalyticsDetails(null)
+      } finally {
+        if (!alive) return
+        setRevLoading(false)
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [hasCafe, session?.username, tab, revRefreshTick, selectedCafeId])
 
   function ImagesSection() {
     return (
@@ -3127,6 +3023,48 @@ export default function OwnerDashboard() {
           <div>
             <div className="text-xs text-slate-500">Cafe Owner Dashboard</div>
             <h1 className="mt-1 text-3xl font-extrabold">Welcome, {session?.username || 'Owner'}</h1>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+              <div className="text-slate-600">Current cafe:</div>
+              <select
+                className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-900 outline-none"
+                value={selectedCafeId ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value
+                  const next = v ? Number(v) : null
+                  setSelectedCafeId(next)
+                  try {
+                    if (next != null) window.localStorage.setItem('ownerSelectedCafeId', String(next))
+                    else window.localStorage.removeItem('ownerSelectedCafeId')
+                  } catch {
+                    // ignore
+                  }
+                }}
+                disabled={cafesLoading}
+              >
+                <option value="">Select cafe</option>
+                {cafes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.cafeName || `Cafe #${c.id}`}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm"
+                onClick={() => refreshCafes(selectedCafeId)}
+                disabled={cafesLoading}
+              >
+                Reload cafes
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm font-semibold"
+                onClick={onAddCafe}
+                disabled={cafeLoading}
+              >
+                Add cafe
+              </button>
+            </div>
           </div>
         </div>
 
@@ -3171,12 +3109,15 @@ export default function OwnerDashboard() {
                     onDeleteCafe={onDeleteCafe}
                   />
                 ) : null}
-                {tab === 'staff' ? StaffSection() : null}
-                {tab === 'menu' ? MenuSection() : null}
-                {tab === 'capacities' ? CapacitiesSection() : null}
-                {tab === 'images' ? ImagesSection() : null}
-                {tab === 'bookings' ? BookingsSection() : null}
-                {tab === 'orders' ? OrdersSection() : null}
+
+                {tab === 'staff' ? <StaffSection /> : null}
+                {tab === 'menu' ? <MenuSection /> : null}
+                {tab === 'capacities' ? <CapacitiesSection /> : null}
+                {tab === 'images' ? <ImagesSection /> : null}
+                {tab === 'bookings' ? <BookingsSection /> : null}
+                {tab === 'orders' ? <OrdersSection /> : null}
+                {tab === 'revenue' ? <RevenueSection /> : null}
+                {tab === 'amenities' ? <AmenitiesSection /> : null}
               </>
             ) : (
               <>
@@ -3197,6 +3138,45 @@ export default function OwnerDashboard() {
                 />
               </>
             )}
+
+            {addCafeOpen ? (
+              <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
+                <div className="w-full max-w-4xl rounded-2xl bg-white shadow-xl">
+                  <div className="flex items-center justify-between border-b border-black/10 px-5 py-4">
+                    <div>
+                      <div className="text-sm font-semibold">Add cafe</div>
+                      <div className="mt-1 text-xs text-slate-600">Complete the 3-step cafe registration.</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm"
+                      onClick={closeAddCafe}
+                      disabled={cafeLoading}
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <div className="px-5 pb-6">
+                    <ProfileSection
+                      cafe={addCafeDraft}
+                      setCafe={setAddCafeDraft}
+                      cafeSteps={cafeSteps}
+                      cafeStep={addCafeStep}
+                      setCafeStep={setAddCafeStep}
+                      canGoNextCafe={canGoNextAddCafe}
+                      canSubmitCafe={canSubmitAddCafe}
+                      cafeLoading={cafeLoading}
+                      cafeErr={cafeErr}
+                      cafeMsg={cafeMsg}
+                      canSaveCafe={canSaveAddCafe}
+                      refreshCafe={() => {}}
+                      onSaveCafe={onSaveAddCafe}
+                      onDeleteCafe={() => {}}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </main>
         </div>
       </div>

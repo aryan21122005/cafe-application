@@ -6,6 +6,16 @@ export const api = axios.create({
   baseURL
 })
 
+function ownerHeaders(username, cafeId) {
+  const h = {
+    'X-USERNAME': username
+  }
+  if (cafeId != null && cafeId !== '') {
+    h['X-CAFE-ID'] = String(cafeId)
+  }
+  return h
+}
+
 export async function registerUser(payload, documents) {
   if (documents && documents.length > 0) {
     const fd = new FormData()
@@ -198,6 +208,31 @@ export async function approveCafeAdmin(cafeId) {
   return res.data
 }
 
+export async function getOwnerAnalyticsSummary(username, cafeId) {
+  const res = await api.get('/api/owner/analytics/summary', {
+    headers: {
+      ...ownerHeaders(username, cafeId)
+    }
+  })
+  return res.data
+}
+
+export async function getOwnerAnalyticsDetails(username, cafeId) {
+  const res = await api.get('/api/owner/analytics/details', {
+    headers: {
+      ...ownerHeaders(username, cafeId)
+    }
+  })
+  return res.data
+}
+
+export async function listOwnerCafes(username) {
+  const res = await api.get('/api/owner/cafes', {
+    headers: ownerHeaders(username)
+  })
+  return res.data
+}
+
 export async function listPublicCafes() {
   const res = await api.get('/api/public/cafes')
   return res.data
@@ -318,10 +353,10 @@ export async function changePassword(payload) {
   return res.data
 }
 
-export async function getOwnerCafe(username) {
+export async function getOwnerCafe(username, cafeId) {
   const res = await api.get('/api/owner/cafe', {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
@@ -336,64 +371,64 @@ export async function getOwnerMe(username) {
   return res.data
 }
 
-export async function listOwnerBookings(username) {
+export async function listOwnerBookings(username, cafeId) {
   const res = await api.get('/api/owner/bookings', {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function approveOwnerBooking(username, bookingId) {
+export async function approveOwnerBooking(username, cafeId, bookingId) {
   const res = await api.post(`/api/owner/bookings/${bookingId}/approve`, null, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function denyOwnerBooking(username, bookingId, payload) {
+export async function denyOwnerBooking(username, cafeId, bookingId, payload) {
   const res = await api.post(`/api/owner/bookings/${bookingId}/deny`, payload, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function denyOwnerBookingWithRefund(username, bookingId, payload) {
+export async function denyOwnerBookingWithRefund(username, cafeId, bookingId, payload) {
   const res = await api.post(`/api/owner/bookings/${bookingId}/deny-refund`, payload, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function deleteOwnerBooking(username, bookingId) {
+export async function deleteOwnerBooking(username, cafeId, bookingId) {
   const res = await api.delete(`/api/owner/bookings/${bookingId}`, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function listOwnerOrders(username) {
+export async function listOwnerOrders(username, cafeId) {
   const res = await api.get('/api/owner/orders', {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function deleteOwnerOrder(username, orderId) {
+export async function deleteOwnerOrder(username, cafeId, orderId) {
   const res = await api.delete(`/api/owner/orders/${orderId}`, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
@@ -537,7 +572,7 @@ export async function updateMyProfile(username, payload) {
 export async function upsertOwnerCafe(username, payload) {
   const res = await api.put('/api/owner/cafe', payload, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, payload?.id)
     }
   })
   return res.data
@@ -554,31 +589,31 @@ export async function upsertOwnerCafeWithDocuments(username, payload, docKeys, d
   }
   const res = await api.put('/api/owner/cafe', fd, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, payload?.id)
     }
   })
   return res.data
 }
 
-export async function deleteOwnerCafe(username) {
+export async function deleteOwnerCafe(username, cafeId) {
   const res = await api.delete('/api/owner/cafe', {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function listOwnerStaff(username) {
+export async function listOwnerStaff(username, cafeId) {
   const res = await api.get('/api/owner/staff', {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function createOwnerStaff(username, payload, documents) {
+export async function createOwnerStaff(username, cafeId, payload, documents) {
   if (documents && documents.length > 0) {
     const fd = new FormData()
     fd.append('data', new Blob([JSON.stringify(payload)], { type: 'application/json' }))
@@ -588,7 +623,7 @@ export async function createOwnerStaff(username, payload, documents) {
 
     const res = await api.post('/api/owner/staff', fd, {
       headers: {
-        'X-USERNAME': username
+        ...ownerHeaders(username, cafeId)
       }
     })
     return res.data
@@ -596,155 +631,155 @@ export async function createOwnerStaff(username, payload, documents) {
 
   const res = await api.post('/api/owner/staff', payload, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function deleteOwnerStaff(username, id) {
+export async function deleteOwnerStaff(username, cafeId, id) {
   const res = await api.delete(`/api/owner/staff/${id}`, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function listOwnerMenu(username) {
+export async function listOwnerMenu(username, cafeId) {
   const res = await api.get('/api/owner/menu', {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function createOwnerMenuItem(username, payload) {
+export async function createOwnerMenuItem(username, cafeId, payload) {
   const res = await api.post('/api/owner/menu', payload, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function updateOwnerMenuItem(username, id, payload) {
+export async function updateOwnerMenuItem(username, cafeId, id, payload) {
   const res = await api.put(`/api/owner/menu/${id}`, payload, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function updateOwnerMenuAvailability(username, id, available) {
+export async function updateOwnerMenuAvailability(username, cafeId, id, available) {
   const res = await api.put(
     `/api/owner/menu/${id}/availability`,
     { available },
     {
       headers: {
-        'X-USERNAME': username
+        ...ownerHeaders(username, cafeId)
       }
     }
   )
   return res.data
 }
 
-export async function uploadOwnerMenuItemImage(username, id, file) {
+export async function uploadOwnerMenuItemImage(username, cafeId, id, file) {
   const fd = new FormData()
   fd.append('file', file)
 
   const res = await api.post(`/api/owner/menu/${id}/image`, fd, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function deleteOwnerMenuItem(username, id) {
+export async function deleteOwnerMenuItem(username, cafeId, id) {
   const res = await api.delete(`/api/owner/menu/${id}`, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function listOwnerCapacities(username) {
+export async function listOwnerCapacities(username, cafeId) {
   const res = await api.get('/api/owner/capacities', {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function upsertOwnerCapacity(username, payload) {
+export async function upsertOwnerCapacity(username, cafeId, payload) {
   const res = await api.post('/api/owner/capacities', payload, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function deleteOwnerCapacity(username, id) {
+export async function deleteOwnerCapacity(username, cafeId, id) {
   const res = await api.delete(`/api/owner/capacities/${id}`, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function listOwnerAmenities(username) {
+export async function listOwnerAmenities(username, cafeId) {
   const res = await api.get('/api/owner/amenities', {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function createOwnerAmenity(username, payload) {
+export async function createOwnerAmenity(username, cafeId, payload) {
   const res = await api.post('/api/owner/amenities', payload, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function updateOwnerAmenity(username, id, payload) {
+export async function updateOwnerAmenity(username, cafeId, id, payload) {
   const res = await api.put(`/api/owner/amenities/${id}`, payload, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function deleteOwnerAmenity(username, id) {
+export async function deleteOwnerAmenity(username, cafeId, id) {
   const res = await api.delete(`/api/owner/amenities/${id}`, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function listOwnerImages(username) {
+export async function listOwnerImages(username, cafeId) {
   const res = await api.get('/api/owner/images', {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function uploadOwnerImage(username, file, cover) {
+export async function uploadOwnerImage(username, cafeId, file, cover) {
   const fd = new FormData()
   fd.append('file', file)
   if (cover != null) {
@@ -753,16 +788,16 @@ export async function uploadOwnerImage(username, file, cover) {
 
   const res = await api.post('/api/owner/images', fd, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data
 }
 
-export async function deleteOwnerImage(username, id) {
+export async function deleteOwnerImage(username, cafeId, id) {
   const res = await api.delete(`/api/owner/images/${id}`, {
     headers: {
-      'X-USERNAME': username
+      ...ownerHeaders(username, cafeId)
     }
   })
   return res.data

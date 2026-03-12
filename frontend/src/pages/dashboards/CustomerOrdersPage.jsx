@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createRazorpayOrderForCustomerOrder, deleteCustomerOrder, listCustomerOrders, verifyRazorpayPaymentForCustomerOrder } from '../../lib/api.js'
 import { getSession } from '../../lib/auth.js'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 function TrashIcon({ className }) {
   return (
@@ -17,6 +19,113 @@ function TrashIcon({ className }) {
 export default function CustomerOrdersPage() {
   const session = getSession()
   const username = session?.username
+
+  function formatTs(ts) {
+    const n = Number(ts)
+    if (!Number.isFinite(n) || n <= 0) return '-'
+    try {
+      return new Date(n).toLocaleString()
+    } catch {
+      return String(ts)
+    }
+  }
+
+  function makeReceiptNumber(order) {
+    const cafe = String(order?.cafeName || 'Cafe').replace(/\s+/g, '').toUpperCase()
+    const cust = String(order?.customerName || order?.customerUsername || 'Customer').replace(/\s+/g, '').toUpperCase()
+    const phone = String(order?.customerPhone || '').replace(/\s+/g, '')
+    const email = String(order?.customerEmail || '').trim().toUpperCase()
+    const emailPart = email ? email.replace(/[^A-Z0-9]/g, '').slice(0, 8) : ''
+    const num = order?.orderNumber ?? order?.id
+    return `${cafe}-${cust}${phone ? `-${phone}` : ''}${emailPart ? `-${emailPart}` : ''}-${num}`
+  }
+
+  function downloadReceiptPdf(order) {
+    if (!order?.id) return
+    const paidAt = order?.paidAt || order?.createdAt
+
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+    const pageWidth = doc.internal.pageSize.getWidth()
+
+    const headerH = 72
+    doc.setFillColor(15, 23, 42)
+    doc.rect(0, 0, pageWidth, headerH, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(20)
+    doc.text('Digital Cafe', 40, 46)
+
+    doc.setTextColor(15, 23, 42)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(14)
+    doc.text('Payment Receipt', 40, headerH + 30)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    const receiptNo = makeReceiptNumber(order)
+    doc.text(`Receipt No: ${receiptNo}`, 40, headerH + 50)
+
+    const infoLeftX = 40
+    const infoRightX = pageWidth / 2 + 10
+    let y = headerH + 72
+
+    doc.setFont('helvetica', 'bold')
+    doc.text('Cafe', infoLeftX, y)
+    doc.setFont('helvetica', 'normal')
+    doc.text(String(order?.cafeName || '-'), infoLeftX, y + 14)
+    doc.text(`Owner: ${order?.ownerNames || '-'}`, infoLeftX, y + 28)
+    doc.text(`Table(s): ${order?.allocatedTable || '-'}`, infoLeftX, y + 42)
+
+    doc.setFont('helvetica', 'bold')
+    doc.text('Customer', infoRightX, y)
+    doc.setFont('helvetica', 'normal')
+    doc.text(String(order?.customerName || '-'), infoRightX, y + 14)
+    doc.text(`Phone: ${order?.customerPhone || '-'}`, infoRightX, y + 28)
+    doc.text(`Email: ${order?.customerEmail || '-'}`, infoRightX, y + 42)
+
+    y += 70
+    doc.setDrawColor(226, 232, 240)
+    doc.line(40, y, pageWidth - 40, y)
+    y += 22
+
+    doc.setFont('helvetica', 'bold')
+    doc.text('Payment Details', 40, y)
+    y += 16
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Order ID: ${order?.id}`, 40, y)
+    y += 14
+    doc.text(`Payment ID: ${order?.razorpayPaymentId || '-'}`, 40, y)
+    y += 14
+    doc.text(`Date & Time: ${formatTs(paidAt)}`, 40, y)
+    y += 24
+
+    const items = Array.isArray(order?.items) ? order.items : []
+    const rows = items.map((it) => {
+      const qty = Number(it?.qty || 0)
+      const price = Number(it?.price || 0)
+      const amt = qty * price
+      return [String(it?.itemName || '-'), String(qty), `₹${price.toFixed(2)}`, `₹${amt.toFixed(2)}`]
+    })
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Item', 'Qty', 'Price', 'Amount']],
+      body: rows.length ? rows : [['-', '0', '₹0.00', '₹0.00']],
+      theme: 'grid',
+      headStyles: { fillColor: [15, 23, 42], textColor: 255 },
+      styles: { font: 'helvetica', fontSize: 10 },
+      margin: { left: 40, right: 40 }
+    })
+
+    const endY = doc.lastAutoTable?.finalY || y
+    const total = Number(order?.totalAmount || 0)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(12)
+    doc.text(`Total: ₹${total.toFixed(2)}`, pageWidth - 40, endY + 28, { align: 'right' })
+
+    const safeReceipt = String(receiptNo).replace(/[^a-zA-Z0-9-_]/g, '_')
+    doc.save(`receipt_${safeReceipt}.pdf`)
+  }
 
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(false)
@@ -277,6 +386,19 @@ export default function CustomerOrdersPage() {
                         {payingId === o.id ? 'Opening...' : 'Pay Now'}
                       </button>
                     ) : null}
+
+                    {String(o?.paymentStatus || 'UNPAID').toUpperCase() === 'PAID' ? (
+                      <button
+                        type="button"
+                        className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-white/80 disabled:opacity-50"
+                        disabled={loading}
+                        onClick={() => downloadReceiptPdf(o)}
+                        title="Download receipt PDF"
+                      >
+                        Receipt (PDF)
+                      </button>
+                    ) : null}
+
                     <button
                       type="button"
                       className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-white/80 disabled:opacity-50"

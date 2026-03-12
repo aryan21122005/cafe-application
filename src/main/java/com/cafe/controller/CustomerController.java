@@ -1286,8 +1286,21 @@ public class CustomerController {
         r.setOrderNumber(o.getOrderNumber());
         r.setCafeId(o.getCafe() == null ? null : o.getCafe().getId());
         r.setCafeName(o.getCafe() == null ? null : o.getCafe().getCafeName());
+        r.setOwnerNames(o.getCafe() == null ? null : o.getCafe().getOwnerNames());
         r.setCustomerUsername(o.getCustomerUsername());
         r.setCustomerName(o.getCustomerName());
+        try {
+            String email = null;
+            if (o.getCustomerUsername() != null && !o.getCustomerUsername().isBlank()) {
+                User u = userRepository.findByUsername(o.getCustomerUsername()).orElse(null);
+                if (u != null && u.getPersonalDetails() != null) {
+                    email = u.getPersonalDetails().getEmail();
+                }
+            }
+            r.setCustomerEmail(email);
+        } catch (Exception ignored) {
+            r.setCustomerEmail(null);
+        }
         r.setCustomerPhone(o.getCustomerPhone());
         r.setStatus(o.getStatus());
         r.setTotalAmount(o.getTotalAmount());

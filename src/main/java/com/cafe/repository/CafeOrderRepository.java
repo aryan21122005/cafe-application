@@ -22,6 +22,9 @@ public interface CafeOrderRepository extends JpaRepository<CafeOrder, Long> {
     @Query("select distinct o from CafeOrder o left join fetch o.items")
     List<CafeOrder> findAllWithItems();
 
+    @Query("select distinct o from CafeOrder o left join fetch o.items where o.cafe.id = :cafeId")
+    List<CafeOrder> findByCafeIdWithItems(@Param("cafeId") Long cafeId);
+
     Optional<CafeOrder> findByIdAndCafeId(Long id, Long cafeId);
 
     @Query("select max(o.orderNumber) from CafeOrder o where o.cafe.id = :cafeId")

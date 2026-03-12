@@ -406,7 +406,7 @@ public class StaffController {
         if (u.getRole() == null) return null;
         if (!(u.getRole() == Role.CHEF || u.getRole() == Role.WAITER)) return null;
 
-        Optional<Cafe> cafeOpt = cafeRepository.findByStaffUsername(u.getUsername());
+        Optional<Cafe> cafeOpt = cafeRepository.findByStaff_Username(u.getUsername());
         Cafe cafe = cafeOpt.orElse(null);
         if (cafe == null || cafe.getId() == null) return null;
 

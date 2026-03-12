@@ -17,9 +17,12 @@ public class CafeOrderRow {
     private String customerUsername;
 
     private String customerName;
+    private String customerEmail;
     private String customerPhone;
     private String status;
     private Double totalAmount;
+
+    private String ownerNames;
 
     private String paymentStatus;
     private String razorpayOrderId;

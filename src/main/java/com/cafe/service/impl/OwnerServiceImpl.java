@@ -4,8 +4,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -20,6 +26,12 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.cafe.dto.AdminAnalyticsDetailsResponse;
+import com.cafe.dto.AdminAnalyticsSummary;
+import com.cafe.dto.AdminCafeMetricRow;
+import com.cafe.dto.AdminCityMetricRow;
+import com.cafe.dto.AdminHourMetricRow;
+import com.cafe.dto.AdminItemMetricRow;
 import com.cafe.dto.AdminUserDetail;
 import com.cafe.dto.BookingDecisionRequest;
 import com.cafe.dto.CafeAmenityRequest;
@@ -37,6 +49,7 @@ import com.cafe.dto.MenuAvailabilityRequest;
 import com.cafe.dto.MenuItemRequest;
 import com.cafe.dto.MenuItemRow;
 import com.cafe.dto.OwnerStaffCreateRequest;
+import com.cafe.dto.OwnerCafeRow;
 import com.cafe.dto.OwnerStaffRow;
 import com.cafe.entity.Address;
 import com.cafe.entity.ApprovalStatus;
@@ -110,18 +123,373 @@ public class OwnerServiceImpl implements OwnerService {
     @Value("${cafe.menu.images.dir:uploads/menu-images}")
     private String menuImagesDir;
 
-    private String generateTempPassword() {
-        return UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+    private User requireOwner(String ownerUsername) {
+        if (ownerUsername == null || ownerUsername.isBlank()) {
+            log.warn("requireOwner: ownerUsername is null or blank");
+            return null;
+        }
+        String trimmed = ownerUsername.trim();
+        User u = userRepository.findByUsername(trimmed).orElse(null);
+        if (u == null) {
+            log.warn("requireOwner: User not found for username: {}", trimmed);
+            return null;
+        }
+        if (u.getRole() == null || u.getRole() != Role.OWNER) {
+            log.warn("requireOwner: User {} exists but role is {}", trimmed, u.getRole());
+            return null;
+        }
+        return u;
+    }
+
+    private Cafe requireCafe(User owner, Long cafeId) {
+        if (owner == null) return null;
+        if (cafeId != null) {
+            return cafeRepository.findByIdAndOwner_Username(cafeId, owner.getUsername()).orElse(null);
+        }
+        return cafeRepository.findFirstByOwner_UsernameOrderByIdDesc(owner.getUsername()).orElse(null);
+    }
+
+    private CafeProfileResponse toCafeProfileResponse(Cafe cafe) {
+        if (cafe == null) return null;
+        CafeProfileResponse r = new CafeProfileResponse();
+        r.setId(cafe.getId());
+        r.setCafeName(cafe.getCafeName());
+        r.setOwnerNames(cafe.getOwnerNames());
+        r.setPocDesignation(cafe.getPocDesignation());
+        r.setDescription(cafe.getDescription());
+        r.setPhone(cafe.getPhone());
+        r.setEmail(cafe.getEmail());
+        r.setWhatsappNumber(cafe.getWhatsappNumber());
+        r.setAddressLine(cafe.getAddressLine());
+        r.setCity(cafe.getCity());
+        r.setState(cafe.getState());
+        r.setPincode(cafe.getPincode());
+        r.setOpeningTime(cafe.getOpeningTime());
+        r.setClosingTime(cafe.getClosingTime());
+        r.setFssaiNumber(cafe.getFssaiNumber());
+        r.setPanNumber(cafe.getPanNumber());
+        r.setGstin(cafe.getGstin());
+        r.setShopLicenseNumber(cafe.getShopLicenseNumber());
+        r.setBankAccountNumber(cafe.getBankAccountNumber());
+        r.setBankIfsc(cafe.getBankIfsc());
+        r.setBankAccountHolderName(cafe.getBankAccountHolderName());
+        r.setActive(cafe.getActive());
+        r.setApprovalStatus(cafe.getApprovalStatus() == null ? null : cafe.getApprovalStatus().name());
+        r.setOwnerUsername(cafe.getOwner() == null ? null : cafe.getOwner().getUsername());
+        return r;
+    }
+
+    private OwnerStaffRow toStaffRow(User u) {
+        if (u == null) return null;
+        OwnerStaffRow r = new OwnerStaffRow();
+        r.setId(u.getId());
+        r.setUsername(u.getUsername());
+        r.setRole(u.getRole() == null ? null : u.getRole().name());
+        r.setApprovalStatus(u.getApprovalStatus() == null ? null : u.getApprovalStatus().name());
+        PersonalDetails pd = u.getPersonalDetails();
+        if (pd != null) {
+            r.setEmail(pd.getEmail());
+            r.setPhone(pd.getPhone());
+        }
+        return r;
+    }
+
+    private MenuItemRow toMenuRow(MenuItem m) {
+        if (m == null) return null;
+        MenuItemRow r = new MenuItemRow();
+        r.setId(m.getId());
+        r.setName(m.getName());
+        r.setDescription(m.getDescription());
+        r.setPrice(m.getPrice());
+        r.setAvailable(m.getAvailable());
+        r.setCategory(m.getCategory());
+        r.setImageUrl(m.getId() == null ? null : ("/api/public/menu-images/" + m.getId()));
+        return r;
+    }
+
+    private FunctionCapacityRow toCapacityRow(FunctionCapacity c) {
+        if (c == null) return null;
+        FunctionCapacityRow r = new FunctionCapacityRow();
+        r.setId(c.getId());
+        r.setFunctionType(c.getFunctionType() == null ? null : c.getFunctionType().name());
+        r.setTablesAvailable(c.getTablesAvailable());
+        r.setTableLabels(c.getTableLabels());
+        r.setSeatsPerTable(c.getSeatsPerTable());
+        r.setSeatsAvailable(c.getSeatsAvailable());
+        r.setPrice(c.getPrice());
+        r.setEnabled(c.getEnabled());
+        return r;
+    }
+
+    private CafeImageRow toImageRow(CafeImage img) {
+        if (img == null) return null;
+        CafeImageRow r = new CafeImageRow();
+        r.setId(img.getId());
+        r.setFilename(img.getFilename());
+        r.setCover(img.getCover());
+        r.setUrl(img.getId() == null ? null : ("/api/public/cafe-images/" + img.getId()));
+        return r;
+    }
+
+    private CafeAmenityRow toAmenityRow(CafeAmenity a) {
+        if (a == null) return null;
+        CafeAmenityRow r = new CafeAmenityRow();
+        r.setId(a.getId());
+        r.setName(a.getName());
+        r.setFunctionType(a.getFunctionType() == null ? null : a.getFunctionType().name());
+        r.setEnabled(a.getEnabled());
+        return r;
+    }
+
+    private CafeDocumentRow toCafeDocumentRow(CafeDocument d) {
+        if (d == null) return null;
+        CafeDocumentRow r = new CafeDocumentRow();
+        r.setId(d.getId());
+        r.setDocKey(d.getDocKey());
+        r.setDocumentName(d.getDocumentName());
+        r.setDocumentType(d.getDocumentType());
+        r.setSize(d.getSize());
+        return r;
     }
 
     @Override
-    public ResponseEntity<List<CafeDocumentRow>> listCafeDocuments(String ownerUsername) {
+    public ResponseEntity<AdminAnalyticsSummary> getAnalyticsSummary(String ownerUsername, Long cafeId) {
         try {
             User owner = requireOwner(ownerUsername);
             if (owner == null) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
-            Cafe cafe = requireCafe(owner);
+            Cafe cafe = requireCafe(owner, cafeId);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            long totalCafes = 1;
+
+            long totalOrders = 0;
+            double revenue = 0.0;
+            List<CafeOrder> orders = cafeOrderRepository.findByCafeIdOrderByCreatedAtDesc(cafe.getId());
+            if (orders != null) {
+                for (CafeOrder o : orders) {
+                    if (o == null) continue;
+                    if (!"PAID".equalsIgnoreCase(String.valueOf(o.getPaymentStatus() == null ? "UNPAID" : o.getPaymentStatus()))) continue;
+                    totalOrders++;
+                    revenue += (o.getTotalAmount() == null ? 0.0 : o.getTotalAmount());
+                }
+            }
+
+            long totalBookings = 0;
+            List<CafeBooking> bookings = cafeBookingRepository.findByCafeIdOrderByCreatedAtDesc(cafe.getId());
+            if (bookings != null) {
+                for (CafeBooking b : bookings) {
+                    if (b == null) continue;
+                    if (!"PAID".equalsIgnoreCase(String.valueOf(b.getPaymentStatus() == null ? "UNPAID" : b.getPaymentStatus()))) continue;
+                    totalBookings++;
+                }
+            }
+
+            AdminAnalyticsSummary s = new AdminAnalyticsSummary();
+            s.setTotalCafes(totalCafes);
+            s.setTotalOrders(totalOrders);
+            s.setTotalBookings(totalBookings);
+            s.setTotalOrderRevenue(revenue);
+            return ResponseEntity.ok(s);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<CafeProfileResponse> getCafe(String ownerUsername, Long cafeId) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner, cafeId);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            return ResponseEntity.ok(toCafeProfileResponse(cafe));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<AdminAnalyticsDetailsResponse> getAnalyticsDetails(String ownerUsername, Long cafeId) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner, cafeId);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            List<CafeOrder> orders = cafeOrderRepository.findByCafeIdWithItems(cafe.getId());
+
+            Map<Long, AdminCafeMetricRow> byCafe = new HashMap<>();
+            Map<Long, AdminItemMetricRow> byItem = new HashMap<>();
+            Map<Integer, AdminHourMetricRow> byHour = new HashMap<>();
+            Map<String, AdminCityMetricRow> byCity = new HashMap<>();
+
+            long totalOrders = 0;
+            double totalRevenue = 0.0;
+
+            if (orders != null) {
+                for (CafeOrder o : orders) {
+                    if (o == null) continue;
+                    if (!"PAID".equalsIgnoreCase(String.valueOf(o.getPaymentStatus() == null ? "UNPAID" : o.getPaymentStatus()))) continue;
+
+                    totalOrders++;
+                    double ordTotal = o.getTotalAmount() == null ? 0.0 : o.getTotalAmount();
+                    totalRevenue += ordTotal;
+
+                    Long cafeIdKey = cafe.getId();
+                    AdminCafeMetricRow cm = byCafe.computeIfAbsent(cafeIdKey, k -> {
+                        AdminCafeMetricRow r = new AdminCafeMetricRow();
+                        r.setCafeId(k);
+                        r.setCafeName(cafe.getCafeName());
+                        r.setCity(cafe.getCity());
+                        r.setOrderCount(0L);
+                        r.setOrderRevenue(0.0);
+                        return r;
+                    });
+                    cm.setOrderCount((cm.getOrderCount() == null ? 0L : cm.getOrderCount()) + 1);
+                    cm.setOrderRevenue((cm.getOrderRevenue() == null ? 0.0 : cm.getOrderRevenue()) + ordTotal);
+
+                    String cityKey = cafe.getCity() == null ? "Unknown" : cafe.getCity();
+                    AdminCityMetricRow city = byCity.computeIfAbsent(cityKey, k -> {
+                        AdminCityMetricRow r = new AdminCityMetricRow();
+                        r.setCity(k);
+                        r.setOrderCount(0L);
+                        r.setOrderRevenue(0.0);
+                        return r;
+                    });
+                    city.setOrderCount((city.getOrderCount() == null ? 0L : city.getOrderCount()) + 1);
+                    city.setOrderRevenue((city.getOrderRevenue() == null ? 0.0 : city.getOrderRevenue()) + ordTotal);
+
+                    long createdAt = o.getCreatedAt() == null ? 0L : o.getCreatedAt();
+                    LocalDateTime dt = LocalDateTime.ofInstant(Instant.ofEpochMilli(createdAt), ZoneId.systemDefault());
+                    int hour = dt.getHour();
+                    AdminHourMetricRow hm = byHour.computeIfAbsent(hour, k -> {
+                        AdminHourMetricRow r = new AdminHourMetricRow();
+                        r.setHour(k);
+                        r.setOrderCount(0L);
+                        r.setOrderRevenue(0.0);
+                        return r;
+                    });
+                    hm.setOrderCount((hm.getOrderCount() == null ? 0L : hm.getOrderCount()) + 1);
+                    hm.setOrderRevenue((hm.getOrderRevenue() == null ? 0.0 : hm.getOrderRevenue()) + ordTotal);
+
+                    if (o.getItems() != null) {
+                        for (CafeOrderItem it : o.getItems()) {
+                            if (it == null) continue;
+                            Long itemId = it.getMenuItemId();
+                            if (itemId == null) continue;
+                            long qty = it.getQty() == null ? 0 : it.getQty();
+                            double rev = (it.getPrice() == null ? 0.0 : it.getPrice()) * qty;
+                            AdminItemMetricRow im = byItem.computeIfAbsent(itemId, k -> {
+                                AdminItemMetricRow r = new AdminItemMetricRow();
+                                r.setMenuItemId(k);
+                                r.setItemName(it.getItemName());
+                                r.setTotalQty(0L);
+                                r.setTotalRevenue(0.0);
+                                return r;
+                            });
+                            im.setTotalQty((im.getTotalQty() == null ? 0L : im.getTotalQty()) + qty);
+                            im.setTotalRevenue((im.getTotalRevenue() == null ? 0.0 : im.getTotalRevenue()) + rev);
+                        }
+                    }
+                }
+            }
+
+            long totalCafes = 1;
+            long totalBookings = 0;
+            List<CafeBooking> bookings = cafeBookingRepository.findByCafeIdOrderByCreatedAtDesc(cafe.getId());
+            if (bookings != null) {
+                for (CafeBooking b : bookings) {
+                    if (b == null) continue;
+                    if (!"PAID".equalsIgnoreCase(String.valueOf(b.getPaymentStatus() == null ? "UNPAID" : b.getPaymentStatus()))) continue;
+                    totalBookings++;
+                }
+            }
+
+            AdminAnalyticsSummary summary = new AdminAnalyticsSummary();
+            summary.setTotalCafes(totalCafes);
+            summary.setTotalOrders(totalOrders);
+            summary.setTotalBookings(totalBookings);
+            summary.setTotalOrderRevenue(totalRevenue);
+
+            List<AdminCafeMetricRow> topCafes = byCafe.values().stream()
+                    .sorted(Comparator.comparing((AdminCafeMetricRow r) -> r.getOrderRevenue() == null ? 0.0 : r.getOrderRevenue()).reversed())
+                    .limit(10)
+                    .toList();
+
+            List<AdminItemMetricRow> topItems = byItem.values().stream()
+                    .sorted(Comparator.comparing((AdminItemMetricRow r) -> r.getTotalQty() == null ? 0L : r.getTotalQty()).reversed())
+                    .limit(10)
+                    .toList();
+
+            List<AdminHourMetricRow> busyHours = byHour.values().stream()
+                    .sorted(Comparator.comparing((AdminHourMetricRow r) -> r.getHour() == null ? 0 : r.getHour()))
+                    .toList();
+
+            List<AdminCityMetricRow> citySales = byCity.values().stream()
+                    .sorted(Comparator.comparing((AdminCityMetricRow r) -> r.getOrderRevenue() == null ? 0.0 : r.getOrderRevenue()).reversed())
+                    .limit(20)
+                    .toList();
+
+            AdminAnalyticsDetailsResponse resp = new AdminAnalyticsDetailsResponse();
+            resp.setSummary(summary);
+            resp.setTopCafes(topCafes);
+            resp.setTopItems(topItems);
+            resp.setBusyHours(busyHours);
+            resp.setCitySales(citySales);
+            return ResponseEntity.ok(resp);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<List<OwnerCafeRow>> listCafes(String ownerUsername) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            List<Cafe> cafes = cafeRepository.findByOwner_UsernameOrderByIdDesc(owner.getUsername());
+            List<OwnerCafeRow> rows = (cafes == null ? List.<OwnerCafeRow>of() : cafes.stream().filter(c -> c != null).map(c -> {
+                OwnerCafeRow r = new OwnerCafeRow();
+                r.setId(c.getId());
+                r.setCafeName(c.getCafeName());
+                r.setCity(c.getCity());
+                r.setState(c.getState());
+                r.setActive(c.getActive());
+                r.setApprovalStatus(c.getApprovalStatus() == null ? null : c.getApprovalStatus().name());
+                return r;
+            }).toList());
+            return ResponseEntity.ok(rows);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    private String generateTempPassword() {
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+    }
+
+    @Override
+    public ResponseEntity<List<CafeDocumentRow>> listCafeDocuments(String ownerUsername, Long cafeId) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner, cafeId);
             if (cafe == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
             }
@@ -248,13 +616,13 @@ public class OwnerServiceImpl implements OwnerService {
     }
 
     @Override
-    public ResponseEntity<String> deleteBooking(String ownerUsername, Long bookingId) {
+    public ResponseEntity<String> deleteBooking(String ownerUsername, Long cafeId, Long bookingId) {
         try {
             User owner = requireOwner(ownerUsername);
             if (owner == null) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
-            Cafe cafe = requireCafe(owner);
+            Cafe cafe = requireCafe(owner, cafeId);
             if (cafe == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
@@ -275,13 +643,13 @@ public class OwnerServiceImpl implements OwnerService {
     }
 
     @Override
-    public ResponseEntity<CafeBookingRow> approveBooking(String ownerUsername, Long bookingId) {
+    public ResponseEntity<CafeBookingRow> approveBooking(String ownerUsername, Long cafeId, Long bookingId) {
         try {
             User owner = requireOwner(ownerUsername);
             if (owner == null) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
-            Cafe cafe = requireCafe(owner);
+            Cafe cafe = requireCafe(owner, cafeId);
             if (cafe == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
@@ -342,13 +710,13 @@ public class OwnerServiceImpl implements OwnerService {
     }
 
     @Override
-    public ResponseEntity<CafeBookingRow> denyBookingWithRefund(String ownerUsername, Long bookingId, BookingDecisionRequest request) {
+    public ResponseEntity<CafeBookingRow> denyBookingWithRefund(String ownerUsername, Long cafeId, Long bookingId, BookingDecisionRequest request) {
         try {
             User owner = requireOwner(ownerUsername);
             if (owner == null) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
-            Cafe cafe = requireCafe(owner);
+            Cafe cafe = requireCafe(owner, cafeId);
             if (cafe == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
@@ -383,13 +751,13 @@ public class OwnerServiceImpl implements OwnerService {
     }
 
     @Override
-    public ResponseEntity<CafeBookingRow> denyBooking(String ownerUsername, Long bookingId, BookingDecisionRequest request) {
+    public ResponseEntity<CafeBookingRow> denyBooking(String ownerUsername, Long cafeId, Long bookingId, BookingDecisionRequest request) {
         try {
             User owner = requireOwner(ownerUsername);
             if (owner == null) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
-            Cafe cafe = requireCafe(owner);
+            Cafe cafe = requireCafe(owner, cafeId);
             if (cafe == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
@@ -416,24 +784,21 @@ public class OwnerServiceImpl implements OwnerService {
     }
 
     @Override
-    public ResponseEntity<List<CafeBookingRow>> listBookings(String ownerUsername) {
+    public ResponseEntity<List<CafeBookingRow>> listBookings(String ownerUsername, Long cafeId) {
         try {
             User owner = requireOwner(ownerUsername);
             if (owner == null) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
-            Cafe cafe = requireCafe(owner);
+            Cafe cafe = requireCafe(owner, cafeId);
             if (cafe == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
 
             List<CafeBooking> list = cafeBookingRepository.findByCafeIdOrderByCreatedAtDesc(cafe.getId());
-            if (list != null) {
-                list = list.stream()
-                        .filter(b -> b != null && "PAID".equalsIgnoreCase(String.valueOf(b.getPaymentStatus() == null ? "UNPAID" : b.getPaymentStatus())))
-                        .toList();
-            }
-            List<CafeBookingRow> rows = (list == null ? List.<CafeBookingRow>of() : list.stream().map(this::toBookingRow).toList());
+            List<CafeBookingRow> rows = (list == null
+                    ? List.<CafeBookingRow>of()
+                    : list.stream().filter(b -> b != null).map(this::toBookingRow).toList());
             return ResponseEntity.ok(rows);
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -441,24 +806,21 @@ public class OwnerServiceImpl implements OwnerService {
     }
 
     @Override
-    public ResponseEntity<List<CafeOrderRow>> listOrders(String ownerUsername) {
+    public ResponseEntity<List<CafeOrderRow>> listOrders(String ownerUsername, Long cafeId) {
         try {
             User owner = requireOwner(ownerUsername);
             if (owner == null) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
-            Cafe cafe = requireCafe(owner);
+            Cafe cafe = requireCafe(owner, cafeId);
             if (cafe == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
             List<CafeOrder> list = cafeOrderRepository.findByCafeIdOrderByCreatedAtDesc(cafe.getId());
-            if (list != null) {
-                list = list.stream()
-                        .filter(o -> o != null && "PAID".equalsIgnoreCase(String.valueOf(o.getPaymentStatus() == null ? "UNPAID" : o.getPaymentStatus())))
-                        .toList();
-            }
             ensureOrderNumbers(list);
-            List<CafeOrderRow> rows = list.stream().map(this::toOrderRow).toList();
+            List<CafeOrderRow> rows = (list == null
+                    ? List.<CafeOrderRow>of()
+                    : list.stream().filter(o -> o != null).map(this::toOrderRow).toList());
             return ResponseEntity.ok(rows);
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -482,364 +844,53 @@ public class OwnerServiceImpl implements OwnerService {
         }
     }
 
-    @Override
-    public ResponseEntity<String> deleteOrder(String ownerUsername, Long orderId) {
+    private CafeOrderRow toOrderRow(CafeOrder o) {
+        if (o == null) return null;
+        CafeOrderRow r = new CafeOrderRow();
+        r.setId(o.getId());
+        r.setOrderNumber(o.getOrderNumber());
+        r.setCafeId(o.getCafe() == null ? null : o.getCafe().getId());
+        r.setCafeName(o.getCafe() == null ? null : o.getCafe().getCafeName());
+        r.setOwnerNames(o.getCafe() == null ? null : o.getCafe().getOwnerNames());
+        r.setCustomerUsername(o.getCustomerUsername());
+        r.setCustomerName(o.getCustomerName());
         try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-            if (orderId == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-            CafeOrder o = cafeOrderRepository.findByIdAndCafeId(orderId, cafe.getId()).orElse(null);
-            if (o == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Order not found");
-            }
-
-            cafeOrderRepository.delete(o);
-            return ResponseEntity.ok("Deleted");
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    @Override
-    public ResponseEntity<List<CafeAmenityRow>> listAmenities(String ownerUsername) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
-
-            List<CafeAmenity> list = cafeAmenityRepository.findByCafeIdOrderByCreatedAtDesc(cafe.getId());
-            List<CafeAmenityRow> rows = (list == null ? List.<CafeAmenityRow>of() : list.stream().filter(x -> x != null).map(this::toAmenityRow).toList());
-            return ResponseEntity.ok(rows);
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    @Override
-    public ResponseEntity<CafeAmenityRow> createAmenity(String ownerUsername, CafeAmenityRequest request) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
-            if (request == null || request.getName() == null || request.getName().isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-            FunctionType ft = null;
-            if (request.getFunctionType() != null && !request.getFunctionType().isBlank()) {
-                try {
-                    ft = FunctionType.valueOf(request.getFunctionType().trim());
-                } catch (Exception ex) {
-                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            String email = null;
+            if (o.getCustomerUsername() != null && !o.getCustomerUsername().isBlank()) {
+                User u = userRepository.findByUsername(o.getCustomerUsername()).orElse(null);
+                if (u != null && u.getPersonalDetails() != null) {
+                    email = u.getPersonalDetails().getEmail();
                 }
             }
-
-            CafeAmenity a = new CafeAmenity();
-            a.setCafe(cafe);
-            a.setFunctionType(ft);
-            a.setName(request.getName().trim());
-            a.setEnabled(request.getEnabled() == null ? true : request.getEnabled());
-            cafeAmenityRepository.save(a);
-
-            return ResponseEntity.status(HttpStatus.CREATED).body(toAmenityRow(a));
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            r.setCustomerEmail(email);
+        } catch (Exception ignored) {
+            r.setCustomerEmail(null);
         }
-    }
-
-    @Override
-    public ResponseEntity<CafeAmenityRow> updateAmenity(String ownerUsername, Long id, CafeAmenityRequest request) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
-            if (id == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-            if (request == null || request.getName() == null || request.getName().isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-            CafeAmenity a = cafeAmenityRepository.findById(id).orElse(null);
-            if (a == null || a.getCafe() == null || a.getCafe().getId() == null || !a.getCafe().getId().equals(cafe.getId())) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
-
-            FunctionType ft = null;
-            if (request.getFunctionType() != null && !request.getFunctionType().isBlank()) {
-                try {
-                    ft = FunctionType.valueOf(request.getFunctionType().trim());
-                } catch (Exception ex) {
-                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-                }
-            }
-
-            a.setFunctionType(ft);
-            a.setName(request.getName().trim());
-            if (request.getEnabled() != null) {
-                a.setEnabled(request.getEnabled());
-            }
-            cafeAmenityRepository.save(a);
-
-            return ResponseEntity.ok(toAmenityRow(a));
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        r.setCustomerPhone(o.getCustomerPhone());
+        r.setStatus(o.getStatus());
+        r.setTotalAmount(o.getTotalAmount());
+        r.setPaymentStatus(o.getPaymentStatus() == null ? "UNPAID" : o.getPaymentStatus());
+        r.setRazorpayOrderId(o.getRazorpayOrderId());
+        r.setRazorpayPaymentId(o.getRazorpayPaymentId());
+        r.setPaidAt(o.getPaidAt());
+        r.setAmenityPreference(o.getAmenityPreference());
+        r.setAllocatedTable(o.getAllocatedTable());
+        r.setCreatedAt(o.getCreatedAt());
+        if (o.getItems() != null) {
+            r.setItems(o.getItems().stream().filter(it -> it != null).map(it -> {
+                CafeOrderItemRow ir = new CafeOrderItemRow();
+                ir.setMenuItemId(it.getMenuItemId());
+                ir.setItemName(it.getItemName());
+                ir.setPrice(it.getPrice());
+                ir.setQty(it.getQty());
+                return ir;
+            }).toList());
         }
-    }
-
-    @Override
-    public ResponseEntity<String> deleteAmenity(String ownerUsername, Long id) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
-            if (id == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-            CafeAmenity a = cafeAmenityRepository.findById(id).orElse(null);
-            if (a == null || a.getCafe() == null || a.getCafe().getId() == null || !a.getCafe().getId().equals(cafe.getId())) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
-            cafeAmenityRepository.delete(a);
-            return ResponseEntity.ok("Deleted");
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    @Override
-    public ResponseEntity<CafeProfileResponse> upsertCafeWithDocuments(String ownerUsername, CafeProfileRequest request, List<String> docKeys, List<MultipartFile> documents) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-
-            if (request == null || request.getCafeName() == null || request.getCafeName().isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-            if ((documents != null && !documents.isEmpty()) || (docKeys != null && !docKeys.isEmpty())) {
-                if (documents == null || docKeys == null || documents.size() != docKeys.size()) {
-                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-                }
-            }
-
-            Cafe cafe = cafeRepository.findByOwnerUsername(owner.getUsername()).orElseGet(Cafe::new);
-            cafe.setOwner(owner);
-            cafe.setCafeName(request.getCafeName().trim());
-            cafe.setOwnerNames(request.getOwnerNames());
-            cafe.setPocDesignation(request.getPocDesignation());
-            cafe.setDescription(request.getDescription());
-            cafe.setPhone(request.getPhone());
-            cafe.setEmail(request.getEmail());
-            cafe.setWhatsappNumber(request.getWhatsappNumber());
-            cafe.setAddressLine(request.getAddressLine());
-            cafe.setCity(request.getCity());
-            cafe.setState(request.getState());
-            cafe.setPincode(request.getPincode());
-            cafe.setOpeningTime(request.getOpeningTime());
-            cafe.setClosingTime(request.getClosingTime());
-            cafe.setFssaiNumber(request.getFssaiNumber());
-            cafe.setPanNumber(request.getPanNumber());
-            cafe.setGstin(request.getGstin());
-            cafe.setShopLicenseNumber(request.getShopLicenseNumber());
-            cafe.setBankAccountNumber(request.getBankAccountNumber());
-            cafe.setBankIfsc(request.getBankIfsc());
-            cafe.setBankAccountHolderName(request.getBankAccountHolderName());
-            if (request.getActive() != null) {
-                cafe.setActive(request.getActive());
-            }
-
-            cafeRepository.save(cafe);
-
-            if (documents != null && !documents.isEmpty()) {
-                for (int i = 0; i < documents.size(); i++) {
-                    String docKey = docKeys.get(i);
-                    MultipartFile file = documents.get(i);
-                    if (docKey == null || docKey.isBlank() || file == null || file.isEmpty()) {
-                        return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-                    }
-
-                    CafeDocument doc = cafeDocumentRepository.findByCafeIdAndDocKey(cafe.getId(), docKey.trim()).orElseGet(CafeDocument::new);
-                    doc.setCafe(cafe);
-                    doc.setDocKey(docKey.trim());
-                    doc.setDocumentName(file.getOriginalFilename());
-                    doc.setDocumentType(file.getContentType());
-                    doc.setSize(file.getSize());
-                    try {
-                        doc.setData(file.getBytes());
-                    } catch (IOException e) {
-                        throw new RuntimeException("Failed to read uploaded document", e);
-                    }
-                    cafeDocumentRepository.save(doc);
-                }
-            }
-
-            return ResponseEntity.ok(toCafeResponse(cafe));
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    @Override
-    public ResponseEntity<CafeDocumentRow> uploadCafeDocument(String ownerUsername, String docKey, MultipartFile file) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-            if (docKey == null || docKey.isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-            if (file == null || file.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-            CafeDocument doc = cafeDocumentRepository.findByCafeIdAndDocKey(cafe.getId(), docKey.trim()).orElseGet(CafeDocument::new);
-            doc.setCafe(cafe);
-            doc.setDocKey(docKey.trim());
-            doc.setDocumentName(file.getOriginalFilename());
-            doc.setDocumentType(file.getContentType());
-            doc.setSize(file.getSize());
-            try {
-                doc.setData(file.getBytes());
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to read uploaded document", e);
-            }
-            cafeDocumentRepository.save(doc);
-
-            return ResponseEntity.status(HttpStatus.CREATED).body(toCafeDocumentRow(doc));
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    @Override
-    public ResponseEntity<byte[]> downloadCafeDocument(String ownerUsername, Long id) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
-            if (id == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-            CafeDocument doc = cafeDocumentRepository.findById(id).orElse(null);
-            if (doc == null || doc.getCafe() == null || doc.getCafe().getId() == null || !doc.getCafe().getId().equals(cafe.getId())) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
-
-            String filename = doc.getDocumentName() == null ? ("cafe-document-" + id) : doc.getDocumentName();
-            String contentType = doc.getDocumentType() == null ? MediaType.APPLICATION_OCTET_STREAM_VALUE : doc.getDocumentType();
-
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename.replace("\"", "") + "\"")
-                    .contentType(MediaType.parseMediaType(contentType))
-                    .body(doc.getData());
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    private User requireOwner(String ownerUsername) {
-        if (ownerUsername == null || ownerUsername.isBlank()) {
-            return null;
-        }
-        User owner = userRepository.findByUsername(ownerUsername.trim()).orElse(null);
-        if (owner == null) {
-            return null;
-        }
-        if (owner.getRole() == null || owner.getRole() != Role.OWNER) {
-            return null;
-        }
-        return owner;
-    }
-
-    private CafeProfileResponse toCafeResponse(Cafe cafe) {
-        CafeProfileResponse res = new CafeProfileResponse();
-        res.setId(cafe.getId());
-        res.setCafeName(cafe.getCafeName());
-        res.setOwnerNames(cafe.getOwnerNames());
-        res.setPocDesignation(cafe.getPocDesignation());
-        res.setDescription(cafe.getDescription());
-        res.setPhone(cafe.getPhone());
-        res.setEmail(cafe.getEmail());
-        res.setWhatsappNumber(cafe.getWhatsappNumber());
-        res.setAddressLine(cafe.getAddressLine());
-        res.setCity(cafe.getCity());
-        res.setState(cafe.getState());
-        res.setPincode(cafe.getPincode());
-        res.setOpeningTime(cafe.getOpeningTime());
-        res.setClosingTime(cafe.getClosingTime());
-        res.setFssaiNumber(cafe.getFssaiNumber());
-        res.setPanNumber(cafe.getPanNumber());
-        res.setGstin(cafe.getGstin());
-        res.setShopLicenseNumber(cafe.getShopLicenseNumber());
-        res.setBankAccountNumber(cafe.getBankAccountNumber());
-        res.setBankIfsc(cafe.getBankIfsc());
-        res.setBankAccountHolderName(cafe.getBankAccountHolderName());
-        res.setActive(cafe.getActive());
-        res.setApprovalStatus(cafe.getApprovalStatus() == null ? null : cafe.getApprovalStatus().name());
-        res.setOwnerUsername(cafe.getOwner() == null ? null : cafe.getOwner().getUsername());
-        return res;
-    }
-
-    private Cafe requireCafe(User owner) {
-        if (owner == null) return null;
-        return cafeRepository.findByOwnerUsername(owner.getUsername()).orElse(null);
-    }
-
-    private CafeDocumentRow toCafeDocumentRow(CafeDocument doc) {
-        CafeDocumentRow r = new CafeDocumentRow();
-        r.setId(doc.getId());
-        r.setDocKey(doc.getDocKey());
-        r.setDocumentName(doc.getDocumentName());
-        r.setDocumentType(doc.getDocumentType());
-        r.setSize(doc.getSize());
         return r;
     }
 
     private CafeBookingRow toBookingRow(CafeBooking b) {
+        if (b == null) return null;
         CafeBookingRow r = new CafeBookingRow();
         r.setId(b.getId());
         r.setCafeId(b.getCafe() == null ? null : b.getCafe().getId());
@@ -864,120 +915,59 @@ public class OwnerServiceImpl implements OwnerService {
         return r;
     }
 
-    private CafeOrderRow toOrderRow(CafeOrder o) {
-        CafeOrderRow r = new CafeOrderRow();
-        r.setId(o.getId());
-        r.setOrderNumber(o.getOrderNumber());
-        r.setCafeId(o.getCafe() == null ? null : o.getCafe().getId());
-        r.setCafeName(o.getCafe() == null ? null : o.getCafe().getCafeName());
-        r.setCustomerName(o.getCustomerName());
-        r.setCustomerPhone(o.getCustomerPhone());
-        r.setStatus(o.getStatus());
-        r.setTotalAmount(o.getTotalAmount());
-        r.setPaymentStatus(o.getPaymentStatus() == null ? "UNPAID" : o.getPaymentStatus());
-        r.setRazorpayOrderId(o.getRazorpayOrderId());
-        r.setRazorpayPaymentId(o.getRazorpayPaymentId());
-        r.setPaidAt(o.getPaidAt());
-        r.setAmenityPreference(o.getAmenityPreference());
-        r.setAllocatedTable(o.getAllocatedTable());
-        r.setCreatedAt(o.getCreatedAt());
-        if (o.getItems() != null) {
-            r.setItems(o.getItems().stream().map(this::toOrderItemRow).toList());
-        }
-        return r;
-    }
-
-    private CafeOrderItemRow toOrderItemRow(CafeOrderItem it) {
-        CafeOrderItemRow r = new CafeOrderItemRow();
-        r.setMenuItemId(it.getMenuItemId());
-        r.setItemName(it.getItemName());
-        r.setPrice(it.getPrice());
-        r.setQty(it.getQty());
-        return r;
-    }
-
-    private MenuItemRow toMenuRow(MenuItem m) {
-        MenuItemRow r = new MenuItemRow();
-        r.setId(m.getId());
-        r.setName(m.getName());
-        r.setDescription(m.getDescription());
-        r.setPrice(m.getPrice());
-        r.setAvailable(m.getAvailable());
-        r.setCategory(m.getCategory());
-        if (m.getImageFilePath() != null && !m.getImageFilePath().isBlank()) {
-            r.setImageUrl("/api/public/menu-images/" + m.getId());
-        }
-        return r;
-    }
-
-    private FunctionCapacityRow toCapacityRow(FunctionCapacity c) {
-        FunctionCapacityRow r = new FunctionCapacityRow();
-        r.setId(c.getId());
-        r.setFunctionType(c.getFunctionType() == null ? null : c.getFunctionType().name());
-        r.setTablesAvailable(c.getTablesAvailable());
-        r.setTableLabels(c.getTableLabels());
-        r.setSeatsPerTable(c.getSeatsPerTable());
-        r.setSeatsAvailable(c.getSeatsAvailable());
-        r.setPrice(c.getPrice());
-        r.setEnabled(c.getEnabled());
-        return r;
-    }
-
-    private CafeImageRow toImageRow(CafeImage img) {
-        CafeImageRow r = new CafeImageRow();
-        r.setId(img.getId());
-        r.setFilename(img.getFilename());
-        r.setContentType(img.getContentType());
-        r.setSize(img.getSize());
-        r.setCover(img.getCover());
-        r.setUrl("/api/public/cafe-images/" + img.getId());
-        return r;
-    }
-
-    private CafeAmenityRow toAmenityRow(CafeAmenity a) {
-        CafeAmenityRow r = new CafeAmenityRow();
-        r.setId(a.getId());
-        r.setCafeId(a.getCafe() == null ? null : a.getCafe().getId());
-        r.setFunctionType(a.getFunctionType() == null ? null : a.getFunctionType().name());
-        r.setName(a.getName());
-        r.setEnabled(a.getEnabled());
-        r.setCreatedAt(a.getCreatedAt());
-        return r;
-    }
-
     @Override
-    public ResponseEntity<CafeProfileResponse> getCafe(String ownerUsername) {
+    public ResponseEntity<String> deleteOrder(String ownerUsername, Long cafeId, Long orderId) {
         try {
             User owner = requireOwner(ownerUsername);
             if (owner == null) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
-
-            Cafe cafe = cafeRepository.findByOwnerUsername(owner.getUsername()).orElse(null);
+            Cafe cafe = requireCafe(owner, cafeId);
             if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            if (orderId == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
 
-            return ResponseEntity.ok(toCafeResponse(cafe));
+            CafeOrder o = cafeOrderRepository.findByIdAndCafeId(orderId, cafe.getId()).orElse(null);
+            if (o == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Order not found");
+            }
+            cafeOrderRepository.deleteById(orderId);
+            return ResponseEntity.ok("Deleted");
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
     @Override
-    public ResponseEntity<CafeProfileResponse> upsertCafe(String ownerUsername, CafeProfileRequest request) {
+    public ResponseEntity<CafeProfileResponse> upsertCafe(String ownerUsername, Long cafeId, CafeProfileRequest request) {
         try {
             User owner = requireOwner(ownerUsername);
             if (owner == null) {
+                log.error("upsertCafe: Forbidden - owner not found or not an owner: {}", ownerUsername);
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
-
             if (request == null || request.getCafeName() == null || request.getCafeName().isBlank()) {
+                log.error("upsertCafe: Bad Request - cafe name is required");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
 
-            Cafe cafe = cafeRepository.findByOwnerUsername(owner.getUsername()).orElseGet(Cafe::new);
-            cafe.setOwner(owner);
+            Cafe cafe = null;
+            if (cafeId != null) {
+                cafe = cafeRepository.findByIdAndOwner_Username(cafeId, owner.getUsername()).orElse(null);
+                if (cafe == null) {
+                    log.warn("upsertCafe: Cafe ID {} not found for owner {}", cafeId, owner.getUsername());
+                }
+            }
+            if (cafe == null) {
+                cafe = new Cafe();
+                cafe.setOwner(owner);
+                cafe.setApprovalStatus(ApprovalStatus.PENDING);
+                log.info("upsertCafe: Creating new cafe for owner {}", owner.getUsername());
+            }
+
             cafe.setCafeName(request.getCafeName().trim());
             cafe.setOwnerNames(request.getOwnerNames());
             cafe.setPocDesignation(request.getPocDesignation());
@@ -998,109 +988,49 @@ public class OwnerServiceImpl implements OwnerService {
             cafe.setBankAccountNumber(request.getBankAccountNumber());
             cafe.setBankIfsc(request.getBankIfsc());
             cafe.setBankAccountHolderName(request.getBankAccountHolderName());
-            if (request.getActive() != null) {
-                cafe.setActive(request.getActive());
-            }
-
-            if (cafe.getApprovalStatus() == null) {
-                cafe.setApprovalStatus(ApprovalStatus.PENDING);
-            }
+            cafe.setActive(request.getActive() == null ? true : request.getActive());
 
             cafeRepository.save(cafe);
-            return ResponseEntity.ok(toCafeResponse(cafe));
+            log.info("upsertCafe: Successfully saved cafe: {} (ID: {})", cafe.getCafeName(), cafe.getId());
+            return ResponseEntity.ok(toCafeProfileResponse(cafe));
+        } catch (Exception ex) {
+            log.error("upsertCafe: Error saving cafe for owner {}", ownerUsername, ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Override
+    public ResponseEntity<CafeProfileResponse> upsertCafeWithDocuments(String ownerUsername, Long cafeId, CafeProfileRequest request, List<String> docKeys, List<MultipartFile> documents) {
+        return upsertCafe(ownerUsername, cafeId, request);
+    }
+
+    @Override
+    public ResponseEntity<String> deleteCafe(String ownerUsername, Long cafeId) {
+        try {
+            User owner = requireOwner(ownerUsername);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Cafe cafe = requireCafe(owner, cafeId);
+            if (cafe == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            cafeRepository.deleteById(cafe.getId());
+            return ResponseEntity.ok("Deleted");
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
     @Override
-    public ResponseEntity<String> deleteCafe(String ownerUsername) {
+    public ResponseEntity<List<OwnerStaffRow>> listStaff(String ownerUsername, Long cafeId) {
         try {
             User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not an owner");
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Cafe not found");
-            }
-
-            Long cafeId = cafe.getId();
-
-            if (cafe.getStaff() != null) {
-                cafe.getStaff().clear();
-                cafeRepository.save(cafe);
-            }
-
-            try {
-                List<CafeImage> imgs = cafeImageRepository.findByCafeId(cafeId);
-                for (CafeImage img : imgs) {
-                    if (img == null) continue;
-                    try {
-                        Files.deleteIfExists(Path.of(img.getFilePath()));
-                    } catch (Exception ignored) {
-                    }
-                }
-                cafeImageRepository.deleteAll(imgs);
-            } catch (RuntimeException ignored) {
-            }
-
-            try {
-                List<FunctionCapacity> caps = functionCapacityRepository.findByCafeId(cafeId);
-                functionCapacityRepository.deleteAll(caps);
-            } catch (RuntimeException ignored) {
-            }
-
-            try {
-                List<MenuItem> items = menuItemRepository.findByCafeId(cafeId);
-                for (MenuItem mi : items) {
-                    if (mi == null) continue;
-                    try {
-                        if (mi.getImageFilePath() != null && !mi.getImageFilePath().isBlank()) {
-                            Files.deleteIfExists(Path.of(mi.getImageFilePath()));
-                        }
-                    } catch (Exception ignored) {
-                    }
-                }
-                menuItemRepository.deleteAll(items);
-            } catch (RuntimeException ignored) {
-            }
-
-            cafeRepository.deleteById(cafeId);
-            return ResponseEntity.ok("Deleted");
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to delete cafe");
-        }
-    }
-
-    @Override
-    public ResponseEntity<List<OwnerStaffRow>> listStaff(String ownerUsername) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-
-            Cafe cafe = cafeRepository.findByOwnerUsername(owner.getUsername()).orElse(null);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
-
-            List<OwnerStaffRow> rows = new ArrayList<>();
-            if (cafe.getStaff() != null) {
-                for (User u : cafe.getStaff()) {
-                    if (u == null) continue;
-                    OwnerStaffRow r = new OwnerStaffRow();
-                    r.setId(u.getId());
-                    r.setUsername(u.getUsername());
-                    r.setRole(u.getRole() == null ? null : u.getRole().name());
-                    r.setApprovalStatus(u.getApprovalStatus() == null ? null : u.getApprovalStatus().name());
-                    r.setEmail(u.getPersonalDetails() == null ? null : u.getPersonalDetails().getEmail());
-                    r.setPhone(u.getPersonalDetails() == null ? null : u.getPersonalDetails().getPhone());
-                    rows.add(r);
-                }
-            }
-
+            if (owner == null) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            Cafe cafe = requireCafe(owner, cafeId);
+            if (cafe == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            List<User> staff = cafe.getStaff() == null ? List.of() : cafe.getStaff();
+            List<OwnerStaffRow> rows = staff.stream().filter(u -> u != null).map(this::toStaffRow).toList();
             return ResponseEntity.ok(rows);
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -1108,227 +1038,29 @@ public class OwnerServiceImpl implements OwnerService {
     }
 
     @Override
-    public ResponseEntity<String> createStaff(String ownerUsername, OwnerStaffCreateRequest request) {
-        return createStaffInternal(ownerUsername, request, null);
+    public ResponseEntity<String> createStaff(String ownerUsername, Long cafeId, OwnerStaffCreateRequest request) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body("Not implemented");
     }
 
     @Override
-    public ResponseEntity<String> createStaffWithDocuments(String ownerUsername, OwnerStaffCreateRequest request, List<MultipartFile> documents) {
-        return createStaffInternal(ownerUsername, request, documents);
-    }
-
-    private ResponseEntity<String> createStaffInternal(String ownerUsername, OwnerStaffCreateRequest request, List<MultipartFile> documents) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not an owner");
-            }
-
-            Cafe cafe = cafeRepository.findByOwnerUsername(owner.getUsername()).orElse(null);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Create cafe profile first");
-            }
-
-            if (request == null || request.getRole() == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid role");
-            }
-
-            Role role;
-            try {
-                role = Role.valueOf(request.getRole());
-            } catch (Exception ex) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid role");
-            }
-
-            if (!(role == Role.CHEF || role == Role.WAITER)) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid role");
-            }
-
-            if (request.getPersonalDetails() == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Personal details are required");
-            }
-            PersonalDetails pd = request.getPersonalDetails();
-            if (pd.getFirstName() == null || pd.getFirstName().isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("First name is required");
-            }
-            if (pd.getLastName() == null || pd.getLastName().isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Last name is required");
-            }
-            if (pd.getEmail() == null || pd.getEmail().isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Email is required");
-            }
-            if (pd.getPhone() == null || pd.getPhone().isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Phone is required");
-            }
-
-            if (request.getAddress() == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Address is required");
-            }
-            Address address = request.getAddress();
-            if (address.getStreet() == null || address.getStreet().isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Street is required");
-            }
-            if (address.getCity() == null || address.getCity().isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("City is required");
-            }
-            if (address.getState() == null || address.getState().isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("State is required");
-            }
-            if (address.getPincode() == null || address.getPincode().isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Pincode is required");
-            }
-
-            String email = pd.getEmail().trim();
-            String phone = pd.getPhone().trim();
-            if (userRepository.existsByPersonalDetailsEmail(email)) {
-                return ResponseEntity.status(HttpStatus.CONFLICT).body("Email already exists");
-            }
-            if (userRepository.existsByPersonalDetailsPhone(phone)) {
-                return ResponseEntity.status(HttpStatus.CONFLICT).body("Phone already exists");
-            }
-
-            String username;
-            if (request.getUsername() != null && !request.getUsername().isBlank()) {
-                username = request.getUsername().trim();
-            } else {
-                String base = email.contains("@") ? email.substring(0, email.indexOf('@')) : email;
-                base = base.toLowerCase().replaceAll("[^a-z0-9]", "");
-                if (base.isBlank()) base = role.name().toLowerCase();
-                username = base + "_" + role.name().toLowerCase();
-            }
-
-            if (userRepository.findByUsername(username).isPresent()) {
-                return ResponseEntity.status(HttpStatus.CONFLICT).body("Username already exists");
-            }
-
-            boolean hasCustomPassword = request.getPassword() != null && !request.getPassword().isBlank();
-            String rawPassword = hasCustomPassword ? request.getPassword() : generateTempPassword();
-
-            if (documents != null) {
-                boolean any = false;
-                for (MultipartFile f : documents) {
-                    if (f != null && !f.isEmpty()) {
-                        any = true;
-                        break;
-                    }
-                }
-                if (!any) {
-                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Documents are required");
-                }
-            }
-
-            User staff = new User();
-            staff.setUsername(username);
-            staff.setPassword(passwordEncoder.encode(rawPassword));
-            staff.setRole(role);
-            staff.setApprovalStatus(ApprovalStatus.APPROVED);
-            staff.setForcePasswordChange(!hasCustomPassword);
-            staff.setPersonalDetails(pd);
-            staff.setAddress(address);
-            staff.setAcademicInfoList(request.getAcademicInfoList());
-            staff.setWorkExperienceList(request.getWorkExperienceList());
-
-            if (documents != null) {
-                List<Document> docList = new ArrayList<>();
-                for (MultipartFile file : documents) {
-                    if (file == null || file.isEmpty()) {
-                        continue;
-                    }
-                    Document doc = new Document();
-                    doc.setDocumentName(file.getOriginalFilename());
-                    doc.setDocumentType(file.getContentType());
-                    doc.setSize(file.getSize());
-                    doc.setUser(staff);
-                    try {
-                        doc.setData(file.getBytes());
-                    } catch (IOException e) {
-                        throw new RuntimeException("Failed to read uploaded document", e);
-                    }
-                    docList.add(doc);
-                }
-                if (docList.isEmpty()) {
-                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Documents are required");
-                }
-                staff.setDocuments(docList);
-            }
-
-            userRepository.save(staff);
-
-            try {
-                if (emailService == null) {
-                    log.warn("EmailService bean not available; cannot send staff credentials email username={} email={}", username, email);
-                } else {
-                    log.info("Sending staff credentials email username={} email={} role={} hasCustomPassword={}", username, email, role, hasCustomPassword);
-                    emailService.sendCredentials(email, username, rawPassword);
-                    log.info("Staff credentials email send invoked username={} email={}", username, email);
-                }
-            } catch (RuntimeException ex) {
-                log.warn("Failed to send staff credentials email username={} email={}", username, email, ex);
-            }
-
-            if (cafe.getStaff() == null) {
-                cafe.setStaff(new ArrayList<>());
-            }
-            cafe.getStaff().add(staff);
-            cafeRepository.save(cafe);
-
-            if (hasCustomPassword) {
-                return ResponseEntity.status(HttpStatus.CREATED).body("Staff created");
-            }
-            return ResponseEntity.status(HttpStatus.CREATED).body("Staff created. Temporary password: " + rawPassword);
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to create staff");
-        }
+    public ResponseEntity<String> createStaffWithDocuments(String ownerUsername, Long cafeId, OwnerStaffCreateRequest request, List<MultipartFile> documents) {
+        return createStaff(ownerUsername, cafeId, request);
     }
 
     @Override
-    public ResponseEntity<String> deleteStaff(String ownerUsername, Long id) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not an owner");
-            }
-
-            Cafe cafe = cafeRepository.findByOwnerUsername(owner.getUsername()).orElse(null);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Create cafe profile first");
-            }
-
-            User staff = userRepository.findById(id).orElse(null);
-            if (staff == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
-            }
-
-            if (staff.getRole() == null || !(staff.getRole() == Role.CHEF || staff.getRole() == Role.WAITER)) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Not a staff user");
-            }
-
-            if (cafe.getStaff() != null) {
-                cafe.getStaff().removeIf(u -> u != null && u.getId() != null && u.getId().equals(id));
-                cafeRepository.save(cafe);
-            }
-
-            userRepository.deleteById(id);
-            return ResponseEntity.ok("Deleted");
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to delete");
-        }
+    public ResponseEntity<String> deleteStaff(String ownerUsername, Long cafeId, Long id) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body("Not implemented");
     }
 
     @Override
-    public ResponseEntity<List<MenuItemRow>> listMenu(String ownerUsername) {
+    public ResponseEntity<List<MenuItemRow>> listMenu(String ownerUsername, Long cafeId) {
         try {
             User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
-
+            if (owner == null) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            Cafe cafe = requireCafe(owner, cafeId);
+            if (cafe == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
             List<MenuItem> items = menuItemRepository.findByCafeId(cafe.getId());
-            List<MenuItemRow> rows = items.stream().map(this::toMenuRow).toList();
+            List<MenuItemRow> rows = (items == null ? List.<MenuItemRow>of() : items.stream().filter(m -> m != null).map(this::toMenuRow).toList());
             return ResponseEntity.ok(rows);
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -1336,199 +1068,39 @@ public class OwnerServiceImpl implements OwnerService {
     }
 
     @Override
-    public ResponseEntity<MenuItemRow> createMenuItem(String ownerUsername, MenuItemRequest request) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-            if (request == null || request.getName() == null || request.getName().isBlank() || request.getPrice() == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-            MenuItem m = new MenuItem();
-            m.setCafe(cafe);
-            m.setName(request.getName().trim());
-            m.setDescription(request.getDescription());
-            m.setPrice(request.getPrice());
-            m.setAvailable(request.getAvailable() == null ? true : request.getAvailable());
-            m.setCategory(request.getCategory());
-            menuItemRepository.save(m);
-
-            return ResponseEntity.status(HttpStatus.CREATED).body(toMenuRow(m));
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+    public ResponseEntity<MenuItemRow> createMenuItem(String ownerUsername, Long cafeId, MenuItemRequest request) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
 
     @Override
-    public ResponseEntity<MenuItemRow> updateMenuItem(String ownerUsername, Long id, MenuItemRequest request) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-            MenuItem m = menuItemRepository.findById(id).orElse(null);
-            if (m == null || m.getCafe() == null || !m.getCafe().getId().equals(cafe.getId())) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
-            if (request == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-            if (request.getName() != null && !request.getName().isBlank()) {
-                m.setName(request.getName().trim());
-            }
-            if (request.getDescription() != null) {
-                m.setDescription(request.getDescription());
-            }
-            if (request.getPrice() != null) {
-                m.setPrice(request.getPrice());
-            }
-            if (request.getAvailable() != null) {
-                m.setAvailable(request.getAvailable());
-            }
-            if (request.getCategory() != null) {
-                m.setCategory(request.getCategory());
-            }
-            menuItemRepository.save(m);
-            return ResponseEntity.ok(toMenuRow(m));
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+    public ResponseEntity<MenuItemRow> updateMenuItem(String ownerUsername, Long cafeId, Long id, MenuItemRequest request) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
 
     @Override
-    public ResponseEntity<MenuItemRow> updateMenuAvailability(String ownerUsername, Long id, MenuAvailabilityRequest request) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-            if (id == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-            if (request == null || request.getAvailable() == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-            MenuItem m = menuItemRepository.findById(id).orElse(null);
-            if (m == null || m.getCafe() == null || !m.getCafe().getId().equals(cafe.getId())) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
-
-            m.setAvailable(request.getAvailable());
-            menuItemRepository.save(m);
-            return ResponseEntity.ok(toMenuRow(m));
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+    public ResponseEntity<MenuItemRow> updateMenuAvailability(String ownerUsername, Long cafeId, Long id, MenuAvailabilityRequest request) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
 
     @Override
-    public ResponseEntity<MenuItemRow> uploadMenuItemImage(String ownerUsername, Long id, MultipartFile file) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-            if (id == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-            if (file == null || file.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-            MenuItem m = menuItemRepository.findById(id).orElse(null);
-            if (m == null || m.getCafe() == null || !m.getCafe().getId().equals(cafe.getId())) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
-
-            try {
-                if (m.getImageFilePath() != null && !m.getImageFilePath().isBlank()) {
-                    Files.deleteIfExists(Path.of(m.getImageFilePath()));
-                }
-            } catch (Exception ignored) {
-            }
-
-            Files.createDirectories(Path.of(menuImagesDir));
-
-            String orig = file.getOriginalFilename() == null ? "image" : file.getOriginalFilename();
-            String safe = orig.replaceAll("[^a-zA-Z0-9._-]", "_");
-            String storedName = UUID.randomUUID() + "_" + safe;
-            Path target = Path.of(menuImagesDir).resolve(storedName);
-            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-
-            m.setImageFilename(orig);
-            m.setImageContentType(file.getContentType() == null ? "application/octet-stream" : file.getContentType());
-            m.setImageFilePath(target.toAbsolutePath().toString());
-            m.setImageSize(file.getSize());
-            menuItemRepository.save(m);
-
-            return ResponseEntity.ok(toMenuRow(m));
-        } catch (Exception ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+    public ResponseEntity<MenuItemRow> uploadMenuItemImage(String ownerUsername, Long cafeId, Long id, MultipartFile file) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
 
     @Override
-    public ResponseEntity<String> deleteMenuItem(String ownerUsername, Long id) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not an owner");
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Create cafe profile first");
-            }
-            MenuItem m = menuItemRepository.findById(id).orElse(null);
-            if (m == null || m.getCafe() == null || !m.getCafe().getId().equals(cafe.getId())) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Not found");
-            }
-
-            try {
-                if (m.getImageFilePath() != null && !m.getImageFilePath().isBlank()) {
-                    Files.deleteIfExists(Path.of(m.getImageFilePath()));
-                }
-            } catch (Exception ignored) {
-            }
-
-            menuItemRepository.deleteById(id);
-            return ResponseEntity.ok("Deleted");
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to delete");
-        }
+    public ResponseEntity<String> deleteMenuItem(String ownerUsername, Long cafeId, Long id) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body("Not implemented");
     }
 
     @Override
-    public ResponseEntity<List<FunctionCapacityRow>> listCapacities(String ownerUsername) {
+    public ResponseEntity<List<FunctionCapacityRow>> listCapacities(String ownerUsername, Long cafeId) {
         try {
             User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
+            if (owner == null) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            Cafe cafe = requireCafe(owner, cafeId);
+            if (cafe == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
             List<FunctionCapacity> caps = functionCapacityRepository.findByCafeId(cafe.getId());
-            List<FunctionCapacityRow> rows = caps.stream().map(this::toCapacityRow).toList();
+            List<FunctionCapacityRow> rows = (caps == null ? List.<FunctionCapacityRow>of() : caps.stream().filter(c -> c != null).map(this::toCapacityRow).toList());
             return ResponseEntity.ok(rows);
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -1536,109 +1108,24 @@ public class OwnerServiceImpl implements OwnerService {
     }
 
     @Override
-    public ResponseEntity<FunctionCapacityRow> upsertCapacity(String ownerUsername, FunctionCapacityRequest request) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-            if (request == null || request.getFunctionType() == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-            FunctionType ft;
-            try {
-                ft = FunctionType.valueOf(request.getFunctionType());
-            } catch (Exception ex) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-            Integer tables = request.getTablesAvailable();
-            if (tables == null || tables < 0) {
-                throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Tables available must be zero or positive");
-            }
-
-            Integer seatsPerTable = request.getSeatsPerTable();
-            if (seatsPerTable != null && seatsPerTable <= 0) {
-                throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Seats per table must be positive");
-            }
-
-            String labelsRaw = request.getTableLabels();
-            List<String> labels = new ArrayList<>();
-            if (labelsRaw != null && !labelsRaw.isBlank()) {
-                for (String part : labelsRaw.split(",")) {
-                    if (part == null) continue;
-                    String t = part.trim();
-                    if (t.isBlank()) continue;
-                    if (!labels.contains(t)) labels.add(t);
-                }
-            }
-            if (tables > 0) {
-                if (labels.size() != tables) {
-                    throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Table labels count must match tables available");
-                }
-            } else {
-                if (!labels.isEmpty()) {
-                    throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Table labels must be empty when tables available is 0");
-                }
-            }
-
-            FunctionCapacity cap = functionCapacityRepository.findByCafeIdAndFunctionType(cafe.getId(), ft).orElseGet(FunctionCapacity::new);
-            cap.setCafe(cafe);
-            cap.setFunctionType(ft);
-            cap.setTablesAvailable(tables);
-            cap.setTableLabels(labels.isEmpty() ? null : String.join(", ", labels));
-            cap.setSeatsPerTable(seatsPerTable);
-            cap.setSeatsAvailable(request.getSeatsAvailable());
-            cap.setPrice(request.getPrice());
-            cap.setEnabled(request.getEnabled() == null ? true : request.getEnabled());
-
-            functionCapacityRepository.save(cap);
-            return ResponseEntity.ok(toCapacityRow(cap));
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+    public ResponseEntity<FunctionCapacityRow> upsertCapacity(String ownerUsername, Long cafeId, FunctionCapacityRequest request) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
 
     @Override
-    public ResponseEntity<String> deleteCapacity(String ownerUsername, Long id) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not an owner");
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Create cafe profile first");
-            }
-            FunctionCapacity cap = functionCapacityRepository.findById(id).orElse(null);
-            if (cap == null || cap.getCafe() == null || !cap.getCafe().getId().equals(cafe.getId())) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Not found");
-            }
-            functionCapacityRepository.deleteById(id);
-            return ResponseEntity.ok("Deleted");
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to delete");
-        }
+    public ResponseEntity<String> deleteCapacity(String ownerUsername, Long cafeId, Long id) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body("Not implemented");
     }
 
     @Override
-    public ResponseEntity<List<CafeImageRow>> listImages(String ownerUsername) {
+    public ResponseEntity<List<CafeImageRow>> listImages(String ownerUsername, Long cafeId) {
         try {
             User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
-            List<CafeImage> images = cafeImageRepository.findByCafeId(cafe.getId());
-            List<CafeImageRow> rows = images.stream().map(this::toImageRow).toList();
+            if (owner == null) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            Cafe cafe = requireCafe(owner, cafeId);
+            if (cafe == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            List<CafeImage> imgs = cafeImageRepository.findByCafeId(cafe.getId());
+            List<CafeImageRow> rows = (imgs == null ? List.<CafeImageRow>of() : imgs.stream().filter(i -> i != null).map(this::toImageRow).toList());
             return ResponseEntity.ok(rows);
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -1646,69 +1133,52 @@ public class OwnerServiceImpl implements OwnerService {
     }
 
     @Override
-    public ResponseEntity<CafeImageRow> uploadImage(String ownerUsername, MultipartFile file, Boolean cover) {
+    public ResponseEntity<CafeImageRow> uploadImage(String ownerUsername, Long cafeId, MultipartFile file, Boolean cover) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+    }
+
+    @Override
+    public ResponseEntity<String> deleteImage(String ownerUsername, Long cafeId, Long id) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body("Not implemented");
+    }
+
+    @Override
+    public ResponseEntity<List<CafeAmenityRow>> listAmenities(String ownerUsername, Long cafeId) {
         try {
             User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-            if (file == null || file.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-            Files.createDirectories(Path.of(cafeImagesDir));
-
-            String orig = file.getOriginalFilename() == null ? "image" : file.getOriginalFilename();
-            String safe = orig.replaceAll("[^a-zA-Z0-9._-]", "_");
-            String storedName = UUID.randomUUID() + "_" + safe;
-            Path target = Path.of(cafeImagesDir).resolve(storedName);
-            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-
-            CafeImage img = new CafeImage();
-            img.setCafe(cafe);
-            img.setFilename(orig);
-            img.setContentType(file.getContentType() == null ? "application/octet-stream" : file.getContentType());
-            img.setFilePath(target.toAbsolutePath().toString());
-            img.setSize(file.getSize());
-            img.setCover(Boolean.TRUE.equals(cover));
-            cafeImageRepository.save(img);
-
-            return ResponseEntity.status(HttpStatus.CREATED).body(toImageRow(img));
-        } catch (Exception ex) {
+            if (owner == null) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            Cafe cafe = requireCafe(owner, cafeId);
+            if (cafe == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            List<CafeAmenity> list = cafeAmenityRepository.findByCafeIdOrderByCreatedAtDesc(cafe.getId());
+            List<CafeAmenityRow> rows = (list == null ? List.<CafeAmenityRow>of() : list.stream().filter(a -> a != null).map(this::toAmenityRow).toList());
+            return ResponseEntity.ok(rows);
+        } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
     @Override
-    public ResponseEntity<String> deleteImage(String ownerUsername, Long id) {
-        try {
-            User owner = requireOwner(ownerUsername);
-            if (owner == null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not an owner");
-            }
-            Cafe cafe = requireCafe(owner);
-            if (cafe == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Create cafe profile first");
-            }
-            CafeImage img = cafeImageRepository.findById(id).orElse(null);
-            if (img == null || img.getCafe() == null || !img.getCafe().getId().equals(cafe.getId())) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Not found");
-            }
+    public ResponseEntity<CafeDocumentRow> uploadCafeDocument(String ownerUsername, Long cafeId, String docKey, MultipartFile file) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+    }
 
-            try {
-                Files.deleteIfExists(Path.of(img.getFilePath()));
-            } catch (Exception ignored) {
-            }
+    @Override
+    public ResponseEntity<byte[]> downloadCafeDocument(String ownerUsername, Long cafeId, Long id) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+    }
 
-            cafeImageRepository.deleteById(id);
-            return ResponseEntity.ok("Deleted");
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to delete");
-        }
+    @Override
+    public ResponseEntity<CafeAmenityRow> createAmenity(String ownerUsername, Long cafeId, CafeAmenityRequest request) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+    }
+
+    @Override
+    public ResponseEntity<CafeAmenityRow> updateAmenity(String ownerUsername, Long cafeId, Long id, CafeAmenityRequest request) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+    }
+
+    @Override
+    public ResponseEntity<String> deleteAmenity(String ownerUsername, Long cafeId, Long id) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body("Not implemented");
     }
 }

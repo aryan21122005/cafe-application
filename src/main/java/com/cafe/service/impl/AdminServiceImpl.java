@@ -812,7 +812,7 @@ public class AdminServiceImpl implements AdminService {
                 r.setUsername(u.getUsername());
                 r.setEmail(u.getPersonalDetails() == null ? null : u.getPersonalDetails().getEmail());
                 r.setPhone(u.getPersonalDetails() == null ? null : u.getPersonalDetails().getPhone());
-                cafeRepository.findByOwnerUsername(u.getUsername()).ifPresent(c -> r.setCafeName(c.getCafeName()));
+                cafeRepository.findFirstByOwner_UsernameOrderByIdDesc(u.getUsername()).ifPresent(c -> r.setCafeName(c.getCafeName()));
                 rows.add(r);
             }
             return ResponseEntity.ok(rows);
@@ -944,9 +944,6 @@ public class AdminServiceImpl implements AdminService {
             User owner = userRepository.findByUsername(ownerUsername.trim()).orElse(null);
             if (owner == null || owner.getRole() != Role.OWNER) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-            if (cafeRepository.findByOwnerUsername(owner.getUsername()).isPresent()) {
-                return ResponseEntity.status(HttpStatus.CONFLICT).build();
             }
 
             Cafe cafe = new Cafe();
@@ -1444,9 +1441,11 @@ public class AdminServiceImpl implements AdminService {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Cannot delete admin user");
             }
 
-            Cafe ownedCafe = cafeRepository.findByOwnerUsername(user.getUsername()).orElse(null);
-            if (ownedCafe != null && ownedCafe.getOwner() != null && ownedCafe.getOwner().getId() != null && ownedCafe.getOwner().getId().equals(id)) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Cannot delete owner with a cafe");
+            if (user.getRole() == Role.OWNER) {
+                List<Cafe> owned = cafeRepository.findByOwner_UsernameOrderByIdDesc(user.getUsername());
+                if (owned != null && !owned.isEmpty()) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Cannot delete owner with a cafe");
+                }
             }
 
             List<Cafe> cafes = cafeRepository.findAll();
