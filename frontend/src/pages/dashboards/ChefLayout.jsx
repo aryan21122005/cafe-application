@@ -35,7 +35,7 @@ export default function ChefLayout() {
             </div>
 
             <div className="mt-4 grid gap-2">
-              <NavItem to="/dashboard/chef" label="Incoming Orders" active={isActive('/dashboard/chef')} />
+              <NavItem to="/dashboard/chef" label="Orders" active={isActive('/dashboard/chef')} />
               <NavItem to="/dashboard/chef/menu" label="Menu" active={isActive('/dashboard/chef/menu')} />
               <NavItem to="/dashboard/chef/profile" label="Profile Management" active={isActive('/dashboard/chef/profile')} />
             </div>

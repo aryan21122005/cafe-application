@@ -1,4 +1,4 @@
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import {
   confirmRazorpayCustomerBookingFoodOrder,
@@ -43,6 +43,8 @@ function cartTotal(cart, itemsById) {
 
 export default function CustomerCafePage() {
   const session = getSession()
+  const username = session?.username
+  const navigate = useNavigate()
   const { id } = useParams()
   const cafeId = Number(id)
 
@@ -746,6 +748,7 @@ export default function CustomerCafePage() {
 
                           clear()
                           setOrderMsg(isBookingFoodFlow ? 'Food paid and order placed for booking' : 'Order paid and placed')
+                          navigate('/dashboard/customer/orders', { replace: true })
                         } catch (e) {
                           const d = e?.response?.data
                           const msg = (typeof d === 'string' ? d : (d?.message || d?.error || null)) || e?.message

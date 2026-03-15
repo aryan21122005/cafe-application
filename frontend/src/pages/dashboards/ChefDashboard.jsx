@@ -11,6 +11,8 @@ export default function ChefDashboard() {
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
 
+  const [view, setView] = useState('incoming')
+
   const [pageSize, setPageSize] = useState(10)
   const [page, setPage] = useState(1)
 
@@ -42,6 +44,16 @@ export default function ChefDashboard() {
     })
   }, [orders])
 
+  const history = useMemo(() => {
+    const list = Array.isArray(orders) ? orders : []
+    return list.filter((o) => {
+      const s = String(o?.status || '').toUpperCase()
+      return s === 'READY' || s === 'SERVED'
+    })
+  }, [orders])
+
+  const listForView = view === 'history' ? history : incoming
+
   const stats = useMemo(() => {
     const list = Array.isArray(orders) ? orders : []
     let total = list.length
@@ -59,25 +71,55 @@ export default function ChefDashboard() {
 
   const totalPages = useMemo(() => {
     const size = Number(pageSize) || 10
-    return Math.max(1, Math.ceil(incoming.length / size))
-  }, [incoming.length, pageSize])
+    return Math.max(1, Math.ceil(listForView.length / size))
+  }, [listForView.length, pageSize])
 
   const pagedIncoming = useMemo(() => {
     const size = Number(pageSize) || 10
     const safePage = Math.min(Math.max(1, page), totalPages)
     const start = (safePage - 1) * size
-    return incoming.slice(start, start + size)
-  }, [incoming, page, pageSize, totalPages])
+    return listForView.slice(start, start + size)
+  }, [listForView, page, pageSize, totalPages])
 
   return (
     <div className="rounded-2xl border border-black/10 bg-white/70 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-xs text-slate-500">Chef / Orders</div>
-          <div className="mt-1 text-2xl font-extrabold">Incoming Orders</div>
-          <div className="mt-1 text-xs text-slate-600">Update status: PLACED → PREPARING → READY</div>
+          <div className="mt-1 text-2xl font-extrabold">{view === 'history' ? 'Order History' : 'Incoming Orders'}</div>
+          <div className="mt-1 text-xs text-slate-600">{view === 'history' ? 'Previously handled orders (READY/SERVED).' : 'Update status: PLACED → PREPARING → READY'}</div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={
+                (view === 'incoming'
+                  ? 'rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white'
+                  : 'rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-white')
+              }
+              onClick={() => {
+                setView('incoming')
+                setPage(1)
+              }}
+            >
+              Incoming
+            </button>
+            <button
+              type="button"
+              className={
+                (view === 'history'
+                  ? 'rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white'
+                  : 'rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-white')
+              }
+              onClick={() => {
+                setView('history')
+                setPage(1)
+              }}
+            >
+              History
+            </button>
+          </div>
           <div className="flex items-center gap-2 text-sm text-slate-700">
             <span>Show</span>
             <select
@@ -125,7 +167,7 @@ export default function ChefDashboard() {
 
       {!loading ? (
         <div className="mt-4 grid gap-3">
-          {incoming.length > 0 ? (
+          {listForView.length > 0 ? (
             pagedIncoming.map((o) => {
               const st = String(o?.status || 'PLACED').toUpperCase()
               return (
@@ -166,7 +208,7 @@ export default function ChefDashboard() {
                     <button
                       type="button"
                       className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-60"
-                      disabled={loading || !(st === 'PLACED' || st === 'PREPARING')}
+                      disabled={loading || view === 'history' || !(st === 'PLACED' || st === 'PREPARING')}
                       onClick={async () => {
                         setErr('')
                         setMsg('')
@@ -188,7 +230,7 @@ export default function ChefDashboard() {
                     <button
                       type="button"
                       className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
-                      disabled={loading || !(st === 'PREPARING' || st === 'READY')}
+                      disabled={loading || view === 'history' || !(st === 'PREPARING' || st === 'READY')}
                       onClick={async () => {
                         setErr('')
                         setMsg('')
@@ -212,14 +254,14 @@ export default function ChefDashboard() {
               )
             })
           ) : (
-            <div className="text-sm text-slate-600">No incoming orders.</div>
+            <div className="text-sm text-slate-600">{view === 'history' ? 'No order history yet.' : 'No incoming orders.'}</div>
           )}
 
-          {incoming.length > 0 ? (
+          {listForView.length > 0 ? (
             <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-700">
               <div>
                 Showing {(Math.min(Math.max(1, page), totalPages) - 1) * (Number(pageSize) || 10) + 1} to{' '}
-                {Math.min(Math.min(Math.max(1, page), totalPages) * (Number(pageSize) || 10), incoming.length)} of {incoming.length} entries
+                {Math.min(Math.min(Math.max(1, page), totalPages) * (Number(pageSize) || 10), listForView.length)} of {listForView.length} entries
               </div>
               <div className="flex items-center gap-2">
                 <button

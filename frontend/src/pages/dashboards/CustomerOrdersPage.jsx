@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { createRazorpayOrderForCustomerOrder, deleteCustomerOrder, listCustomerOrders, verifyRazorpayPaymentForCustomerOrder } from '../../lib/api.js'
 import { getSession } from '../../lib/auth.js'
 import jsPDF from 'jspdf'
@@ -19,6 +20,7 @@ function TrashIcon({ className }) {
 export default function CustomerOrdersPage() {
   const session = getSession()
   const username = session?.username
+  const navigate = useNavigate()
 
   function formatTs(ts) {
     const n = Number(ts)
@@ -183,6 +185,7 @@ export default function CustomerOrdersPage() {
               razorpaySignature: response.razorpay_signature
             })
             await refresh()
+            navigate('/dashboard/customer/orders', { replace: true })
           } catch (e) {
             const msg = e?.response?.data
             setErr(typeof msg === 'string' ? msg : 'Payment verification failed')
@@ -271,7 +274,7 @@ export default function CustomerOrdersPage() {
   return (
     <div className="rounded-2xl border border-black/10 bg-white/70 p-6">
       <div className="text-xs text-slate-500">Customer / Orders</div>
-      <div className="mt-1 text-2xl font-extrabold">Past Orders</div>
+      <div className="mt-1 text-2xl font-extrabold">My Orders</div>
 
       <div className="mt-6 rounded-2xl border border-black/10 bg-white/70 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">

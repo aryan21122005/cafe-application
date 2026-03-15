@@ -35,7 +35,7 @@ export default function WaiterLayout() {
             </div>
 
             <div className="mt-4 grid gap-2">
-              <NavItem to="/dashboard/waiter" label="Ready Orders" active={isActive('/dashboard/waiter')} />
+              <NavItem to="/dashboard/waiter" label="Orders" active={isActive('/dashboard/waiter')} />
               <NavItem to="/dashboard/waiter/profile" label="Profile Management" active={isActive('/dashboard/waiter/profile')} />
             </div>
 
