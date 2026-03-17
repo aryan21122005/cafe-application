@@ -1505,6 +1505,23 @@ export default function OwnerDashboard() {
     )
   }
 
+  function onAutoGenerateTableLabels() {
+    const n = Number(capTables)
+    if (!Number.isFinite(n) || n <= 0) {
+      setCapErr('Tables must be a valid number greater than 0')
+      return
+    }
+
+    const labels = Array.from({ length: n }, (_, i) => `T${i + 1}`).join(', ')
+    setCapTableLabels(labels)
+
+    const seatsPerTableNum = capSeatsPerTable === '' ? null : Number(capSeatsPerTable)
+    if (seatsPerTableNum != null && Number.isFinite(seatsPerTableNum) && seatsPerTableNum > 0) {
+      const totalSeats = n * seatsPerTableNum
+      setCapSeats(String(totalSeats))
+    }
+  }
+
   function CapacitiesSection() {
     return (
       <div className="mt-6 grid gap-4">
@@ -1534,7 +1551,17 @@ export default function OwnerDashboard() {
               <input className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm" value={capTables} onChange={(e) => setCapTables(e.target.value)} />
             </Field>
             <Field label="Table labels (comma separated)">
-              <input className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm" value={capTableLabels} onChange={(e) => setCapTableLabels(e.target.value)} />
+              <div className="grid gap-2">
+                <input className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm" value={capTableLabels} onChange={(e) => setCapTableLabels(e.target.value)} />
+                <button
+                  type="button"
+                  className="w-fit rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-white disabled:opacity-60"
+                  onClick={onAutoGenerateTableLabels}
+                  disabled={capLoading}
+                >
+                  Auto-generate
+                </button>
+              </div>
             </Field>
           </div>
 
@@ -3110,14 +3137,14 @@ export default function OwnerDashboard() {
                   />
                 ) : null}
 
-                {tab === 'staff' ? <StaffSection /> : null}
-                {tab === 'menu' ? <MenuSection /> : null}
-                {tab === 'capacities' ? <CapacitiesSection /> : null}
-                {tab === 'images' ? <ImagesSection /> : null}
-                {tab === 'bookings' ? <BookingsSection /> : null}
-                {tab === 'orders' ? <OrdersSection /> : null}
-                {tab === 'revenue' ? <RevenueSection /> : null}
-                {tab === 'amenities' ? <AmenitiesSection /> : null}
+                {tab === 'staff' ? StaffSection() : null}
+                {tab === 'menu' ? MenuSection() : null}
+                {tab === 'capacities' ? CapacitiesSection() : null}
+                {tab === 'images' ? ImagesSection() : null}
+                {tab === 'bookings' ? BookingsSection() : null}
+                {tab === 'orders' ? OrdersSection() : null}
+                {tab === 'revenue' ? RevenueSection() : null}
+                {tab === 'amenities' ? AmenitiesSection() : null}
               </>
             ) : (
               <>

@@ -31,7 +31,7 @@ export default function CustomerLayout() {
   return (
     <div className="min-h-screen bg-[#EDE4DA] text-slate-900">
       <div className="flex w-full gap-4 px-4 py-6 md:px-6">
-        <aside className="w-72 shrink-0">
+        <aside className="w-72 shrink-0 sticky top-6 h-[calc(100vh-48px)] overflow-y-auto">
           <div className="rounded-2xl border border-black/10 bg-white/70 p-5">
             <div>
               <div className="text-xs text-slate-500">Customer</div>
