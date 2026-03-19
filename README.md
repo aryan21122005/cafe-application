@@ -100,8 +100,8 @@ CREATE DATABASE cafe_app;
 2. Configure database connection in `src/main/resources/application.properties`:
 ```properties
 spring.datasource.url=jdbc:mysql://localhost:3306/cafe_app
-spring.datasource.username=your_username
-spring.datasource.password=your_password
+spring.datasource.username=<YOUR_DB_USERNAME>
+spring.datasource.password=<YOUR_DB_PASSWORD>
 spring.jpa.hibernate.ddl-auto=update
 ```
 
@@ -110,8 +110,8 @@ Configure email settings in `application.properties`:
 ```properties
 spring.mail.host=smtp.gmail.com
 spring.mail.port=587
-spring.mail.username=your_email@gmail.com
-spring.mail.password=your_app_password
+spring.mail.username=<YOUR_SMTP_USERNAME>
+spring.mail.password=<YOUR_SMTP_APP_PASSWORD>
 spring.mail.properties.mail.smtp.auth=true
 spring.mail.properties.mail.smtp.starttls.enable=true
 ```
@@ -222,8 +222,8 @@ Key configuration options in `src/main/resources/application.properties`:
 ```properties
 # Database
 spring.datasource.url=jdbc:mysql://localhost:3306/cafe_app
-spring.datasource.username=root
-spring.datasource.password=password
+spring.datasource.username=<YOUR_DB_USERNAME>
+spring.datasource.password=<YOUR_DB_PASSWORD>
 
 # File Upload
 cafe.images.dir=uploads/cafe-images
@@ -232,8 +232,7 @@ cafe.images.dir=uploads/cafe-images
 spring.mail.host=smtp.gmail.com
 spring.mail.port=587
 
-# Development Admin
-dev.admin.key=your-secret-key
+
 ```
 
 ## 🚀 Deployment
