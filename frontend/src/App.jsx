@@ -24,105 +24,109 @@ import ChefProfilePage from './pages/dashboards/ChefProfilePage.jsx'
 import ChefMenuPage from './pages/dashboards/ChefMenuPage.jsx'
 import WaiterProfilePage from './pages/dashboards/WaiterProfilePage.jsx'
 import { CustomerCartProvider } from './lib/customerCart.jsx'
+import HelpChatbot from './components/HelpChatbot.jsx'
 
 export default function App() {
   const session = getSession()
 
   return (
-    <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/login" element={<Login />} />
+    <>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/login" element={<Login />} />
 
-      <Route
-        path="/change-password"
-        element={
-          <ProtectedRoute>
-            <ChangePassword />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/change-password"
+          element={
+            <ProtectedRoute>
+              <ChangePassword />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/dashboard"
-        element={<Navigate to={roleToDashboardPath(session?.role)} replace />}
-      />
-      <Route
-        path="/dashboard/admin"
-        element={
-          <ProtectedRoute allowRoles={["ADMIN"]}>
-            <AdminDashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/dashboard/admin/profile"
-        element={
-          <ProtectedRoute allowRoles={["ADMIN"]}>
-            <AdminDashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/dashboard/customer"
-        element={
-          <ProtectedRoute allowRoles={["CUSTOMER"]}>
-            <CustomerCartProvider>
-              <CustomerLayout />
-            </CustomerCartProvider>
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<CustomerDashboard />} />
-        <Route path="cafes/:id" element={<CustomerCafePage />} />
-        <Route path="cart" element={<CustomerCartPage />} />
-        <Route path="profile" element={<CustomerProfilePage />} />
-        <Route path="payments" element={<CustomerPaymentsPage />} />
-        <Route path="coupons" element={<CustomerCouponsPage />} />
-        <Route path="bookings" element={<CustomerBookingsPage />} />
-        <Route path="orders" element={<CustomerOrdersPage />} />
-      </Route>
-      <Route
-        path="/dashboard/owner"
-        element={
-          <ProtectedRoute allowRoles={["OWNER"]}>
-            <OwnerDashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/dashboard/owner/profile"
-        element={
-          <ProtectedRoute allowRoles={["OWNER"]}>
-            <OwnerDashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/dashboard/chef"
-        element={
-          <ProtectedRoute allowRoles={["CHEF"]}>
-            <ChefLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<ChefDashboard />} />
-        <Route path="menu" element={<ChefMenuPage />} />
-        <Route path="profile" element={<ChefProfilePage />} />
-      </Route>
-      <Route
-        path="/dashboard/waiter"
-        element={
-          <ProtectedRoute allowRoles={["WAITER"]}>
-            <WaiterLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<WaiterDashboard />} />
-        <Route path="profile" element={<WaiterProfilePage />} />
-      </Route>
+        <Route
+          path="/dashboard"
+          element={<Navigate to={roleToDashboardPath(session?.role)} replace />}
+        />
+        <Route
+          path="/dashboard/admin"
+          element={
+            <ProtectedRoute allowRoles={["ADMIN"]}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/admin/profile"
+          element={
+            <ProtectedRoute allowRoles={["ADMIN"]}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/customer"
+          element={
+            <ProtectedRoute allowRoles={["CUSTOMER"]}>
+              <CustomerCartProvider>
+                <CustomerLayout />
+              </CustomerCartProvider>
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<CustomerDashboard />} />
+          <Route path="cafes/:id" element={<CustomerCafePage />} />
+          <Route path="cart" element={<CustomerCartPage />} />
+          <Route path="profile" element={<CustomerProfilePage />} />
+          <Route path="payments" element={<CustomerPaymentsPage />} />
+          <Route path="coupons" element={<CustomerCouponsPage />} />
+          <Route path="bookings" element={<CustomerBookingsPage />} />
+          <Route path="orders" element={<CustomerOrdersPage />} />
+        </Route>
+        <Route
+          path="/dashboard/owner"
+          element={
+            <ProtectedRoute allowRoles={["OWNER"]}>
+              <OwnerDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/owner/profile"
+          element={
+            <ProtectedRoute allowRoles={["OWNER"]}>
+              <OwnerDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/chef"
+          element={
+            <ProtectedRoute allowRoles={["CHEF"]}>
+              <ChefLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<ChefDashboard />} />
+          <Route path="menu" element={<ChefMenuPage />} />
+          <Route path="profile" element={<ChefProfilePage />} />
+        </Route>
+        <Route
+          path="/dashboard/waiter"
+          element={
+            <ProtectedRoute allowRoles={["WAITER"]}>
+              <WaiterLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<WaiterDashboard />} />
+          <Route path="profile" element={<WaiterProfilePage />} />
+        </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      <HelpChatbot />
+    </>
   )
 }

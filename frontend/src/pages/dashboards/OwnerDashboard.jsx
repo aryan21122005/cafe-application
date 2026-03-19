@@ -58,6 +58,11 @@ function Field({ label, children, className }) {
   )
 }
 
+function toValidCafeId(v) {
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
 function ProfileSection({
   cafe,
   setCafe,
@@ -90,7 +95,7 @@ function ProfileSection({
           >
             Reload
           </button>
-          {/* {cafe?.id ? (
+          {cafe?.id ? (
             <button
               type="button"
               className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-500/15 disabled:opacity-60"
@@ -99,7 +104,7 @@ function ProfileSection({
             >
               Delete cafe
             </button>
-          ) : null} */}
+          ) : null} 
           <button
             type="button"
             className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
@@ -562,7 +567,7 @@ export default function OwnerDashboard() {
   const [selectedCafeId, setSelectedCafeId] = useState(() => {
     try {
       const v = window.localStorage.getItem('ownerSelectedCafeId')
-      return v ? Number(v) : null
+      return toValidCafeId(v)
     } catch {
       return null
     }
@@ -910,11 +915,11 @@ export default function OwnerDashboard() {
       const rows = Array.isArray(res) ? res : []
       setCafes(rows)
 
-      const preferred = nextSelectedId ?? selectedCafeId
+      const preferred = toValidCafeId(nextSelectedId ?? selectedCafeId)
       const preferredExists = preferred != null && rows.some((c) => Number(c?.id) === Number(preferred))
-      const resolved = preferredExists ? preferred : (rows[0]?.id ?? null)
+      const resolved = toValidCafeId(preferredExists ? preferred : (rows[0]?.id ?? null))
 
-      setSelectedCafeId(resolved != null ? Number(resolved) : null)
+      setSelectedCafeId(resolved)
       try {
         if (resolved != null) window.localStorage.setItem('ownerSelectedCafeId', String(resolved))
         else window.localStorage.removeItem('ownerSelectedCafeId')
@@ -961,6 +966,10 @@ export default function OwnerDashboard() {
     setCafeMsg('')
     setCafeLoading(true)
     try {
+      if (nextCafeId == null) {
+        setHasCafe(false)
+        return false
+      }
       const res = await getOwnerCafe(ownerUsername, nextCafeId)
       setCafe(res)
       setHasCafe(true)
@@ -1074,6 +1083,11 @@ export default function OwnerDashboard() {
     setStaffMsg('')
     setStaffLoading(true)
     try {
+      if (selectedCafeId == null) {
+        setStaff([])
+        setStaffErr('Select a cafe first')
+        return
+      }
       const res = await listOwnerStaff(ownerUsername, selectedCafeId)
       setStaff(Array.isArray(res) ? res : [])
     } catch (e) {
@@ -1089,6 +1103,11 @@ export default function OwnerDashboard() {
     setMenuMsg('')
     setMenuLoading(true)
     try {
+      if (selectedCafeId == null) {
+        setMenu([])
+        setMenuErr('Select a cafe first')
+        return
+      }
       const res = await listOwnerMenu(ownerUsername, selectedCafeId)
       setMenu(Array.isArray(res) ? res : [])
     } catch (e) {
@@ -1104,6 +1123,11 @@ export default function OwnerDashboard() {
     setCapMsg('')
     setCapLoading(true)
     try {
+      if (selectedCafeId == null) {
+        setCapacities([])
+        setCapErr('Select a cafe first')
+        return
+      }
       const res = await listOwnerCapacities(ownerUsername, selectedCafeId)
       setCapacities(Array.isArray(res) ? res : [])
     } catch (e) {
@@ -1119,6 +1143,11 @@ export default function OwnerDashboard() {
     setAmenityMsg('')
     setAmenityLoading(true)
     try {
+      if (selectedCafeId == null) {
+        setAmenities([])
+        setAmenityErr('Select a cafe first')
+        return
+      }
       const res = await listOwnerAmenities(ownerUsername, selectedCafeId)
       setAmenities(Array.isArray(res) ? res : [])
     } catch (e) {
@@ -1134,6 +1163,11 @@ export default function OwnerDashboard() {
     setImgMsg('')
     setImgLoading(true)
     try {
+      if (selectedCafeId == null) {
+        setImages([])
+        setImgErr('Select a cafe first')
+        return
+      }
       const res = await listOwnerImages(ownerUsername, selectedCafeId)
       setImages(Array.isArray(res) ? res : [])
     } catch (e) {
@@ -1190,7 +1224,7 @@ export default function OwnerDashboard() {
     if (!ownerUsername) return
     ;(async () => {
       const rows = await refreshCafes()
-      const resolved = (selectedCafeId != null ? selectedCafeId : (rows?.[0]?.id ?? null))
+      const resolved = toValidCafeId(selectedCafeId) ?? toValidCafeId(rows?.[0]?.id ?? null)
       const ok = await refreshCafeWithId(resolved)
       if (ok) {
         await refreshStaff()
@@ -1202,7 +1236,20 @@ export default function OwnerDashboard() {
         await refreshAmenities()
       }
     })()
-  }, [ownerUsername, selectedCafeId])
+  }, [ownerUsername])
+
+  useEffect(() => {
+    if (!ownerUsername) return
+    if (selectedCafeId == null) return
+
+    if (tab === 'staff') refreshStaff()
+    if (tab === 'menu') refreshMenu()
+    if (tab === 'images') refreshImages()
+    if (tab === 'capacities') refreshCapacities()
+    if (tab === 'bookings') refreshBookings()
+    if (tab === 'orders') refreshOrders()
+    if (tab === 'amenities') refreshAmenities()
+  }, [ownerUsername, selectedCafeId, tab])
 
   function onAddCafe() {
     setCafeErr('')
@@ -3053,11 +3100,11 @@ export default function OwnerDashboard() {
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
               <div className="text-slate-600">Current cafe:</div>
               <select
-                className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-900 outline-none"
+                className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm"
                 value={selectedCafeId ?? ''}
                 onChange={(e) => {
                   const v = e.target.value
-                  const next = v ? Number(v) : null
+                  const next = toValidCafeId(v)
                   setSelectedCafeId(next)
                   try {
                     if (next != null) window.localStorage.setItem('ownerSelectedCafeId', String(next))
@@ -3137,14 +3184,14 @@ export default function OwnerDashboard() {
                   />
                 ) : null}
 
-                {tab === 'staff' ? StaffSection() : null}
-                {tab === 'menu' ? MenuSection() : null}
+                {tab === 'staff' ? <StaffSection /> : null}
+                {tab === 'menu' ? <MenuSection /> : null}
                 {tab === 'capacities' ? CapacitiesSection() : null}
-                {tab === 'images' ? ImagesSection() : null}
+                {tab === 'images' ? <ImagesSection /> : null}
                 {tab === 'bookings' ? BookingsSection() : null}
-                {tab === 'orders' ? OrdersSection() : null}
-                {tab === 'revenue' ? RevenueSection() : null}
-                {tab === 'amenities' ? AmenitiesSection() : null}
+                {tab === 'orders' ? <OrdersSection /> : null}
+                {tab === 'revenue' ? <RevenueSection /> : null}
+                {tab === 'amenities' ? <AmenitiesSection /> : null}
               </>
             ) : (
               <>
