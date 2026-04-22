@@ -1,9 +1,17 @@
 services:
   - type: web
+    name: cafe-app-frontend
+    env: docker
+    plan: free
+    dockerfilePath: ./dockerfile
+    dockerContext: .
+    healthCheckPath: /
+
+  - type: web
     name: cafe-app-backend
     env: docker
     plan: free
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./backend.dockerfile
     dockerContext: .
     envVars:
       - key: DATABASE_URL
