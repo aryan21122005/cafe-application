@@ -29,6 +29,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.cafe.dto.AdminAnalyticsDetailsResponse;
@@ -124,6 +125,7 @@ public class AdminServiceImpl implements AdminService {
     private String menuImagesDir;
 
     @Override
+    @Transactional(readOnly = true)
     public ResponseEntity<List<AdminUserRow>> listUsers() {
         try {
             List<User> users = userRepository.findAll();
@@ -155,6 +157,7 @@ public class AdminServiceImpl implements AdminService {
 
             return ResponseEntity.ok(rows);
         } catch (RuntimeException ex) {
+            log.error("Failed to list users", ex);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

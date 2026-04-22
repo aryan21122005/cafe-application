@@ -1,16 +1,10 @@
 package com.cafe.service.impl;
 
-import com.cafe.dto.LoginRequest;
-import com.cafe.dto.LoginResponse;
-import com.cafe.dto.ChangePasswordRequest;
-import com.cafe.dto.RegisterRequest;
-import com.cafe.entity.Document;
-import com.cafe.entity.ApprovalStatus;
-import com.cafe.entity.Role;
-import com.cafe.entity.User;
-import com.cafe.repository.UserRepository;
-import com.cafe.service.AuthService;
-import com.cafe.service.EmailService;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -18,10 +12,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import com.cafe.dto.ChangePasswordRequest;
+import com.cafe.dto.LoginRequest;
+import com.cafe.dto.LoginResponse;
+import com.cafe.dto.RegisterRequest;
+import com.cafe.entity.ApprovalStatus;
+import com.cafe.entity.Document;
+import com.cafe.entity.Role;
+import com.cafe.entity.User;
+import com.cafe.repository.UserRepository;
+import com.cafe.service.AuthService;
+import com.cafe.service.EmailService;
 
 @Service
 public class AuthServiceImpl implements AuthService {
@@ -79,7 +80,7 @@ public class AuthServiceImpl implements AuthService {
             return "Invalid role";
         }
 
-        if (!(role == Role.CUSTOMER || role == Role.OWNER)) {
+        if (!(role == Role.CUSTOMER || role == Role.OWNER || role == Role.ADMIN)) {
             return "Invalid role";
         }
 
@@ -127,15 +128,23 @@ public class AuthServiceImpl implements AuthService {
             return "Username already exists";
         }
 
-        String rawPassword = generateTempPassword();
+        String rawPassword;
+        boolean forcePasswordChange;
+        if (role == Role.ADMIN && request.getPassword() != null && !request.getPassword().isBlank()) {
+            rawPassword = request.getPassword().trim();
+            forcePasswordChange = false;
+        } else {
+            rawPassword = generateTempPassword();
+            forcePasswordChange = true;
+        }
 
         User user = new User();
 
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(rawPassword));
         user.setRole(role);
-        user.setForcePasswordChange(true);
-        user.setApprovalStatus(ApprovalStatus.PENDING);
+        user.setForcePasswordChange(forcePasswordChange);
+        user.setApprovalStatus(role == Role.ADMIN ? ApprovalStatus.APPROVED : ApprovalStatus.PENDING);
 
         user.setPersonalDetails(request.getPersonalDetails());
         user.setAddress(request.getAddress());
@@ -162,7 +171,7 @@ public class AuthServiceImpl implements AuthService {
             return "Invalid role";
         }
 
-        if (!(role == Role.CUSTOMER || role == Role.OWNER)) {
+        if (!(role == Role.CUSTOMER || role == Role.OWNER || role == Role.ADMIN)) {
             return "Invalid role";
         }
 
@@ -210,15 +219,23 @@ public class AuthServiceImpl implements AuthService {
             return "Username already exists";
         }
 
-        String rawPassword = generateTempPassword();
+        String rawPassword;
+        boolean forcePasswordChange;
+        if (role == Role.ADMIN && request.getPassword() != null && !request.getPassword().isBlank()) {
+            rawPassword = request.getPassword().trim();
+            forcePasswordChange = false;
+        } else {
+            rawPassword = generateTempPassword();
+            forcePasswordChange = true;
+        }
 
         User user = new User();
 
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(rawPassword));
         user.setRole(role);
-        user.setForcePasswordChange(true);
-        user.setApprovalStatus(ApprovalStatus.PENDING);
+        user.setForcePasswordChange(forcePasswordChange);
+        user.setApprovalStatus(role == Role.ADMIN ? ApprovalStatus.APPROVED : ApprovalStatus.PENDING);
 
         user.setPersonalDetails(request.getPersonalDetails());
         user.setAddress(request.getAddress());

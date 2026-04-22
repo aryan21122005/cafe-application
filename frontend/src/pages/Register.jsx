@@ -62,12 +62,26 @@ export default function Register() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
+  const [adminPassword, setAdminPassword] = useState('')
+  const [adminConfirmPassword, setAdminConfirmPassword] = useState('')
+
   const canGoNext = useMemo(() => {
     if (step === 0) {
       return !!role
     }
 
     if (step === 1) {
+      if (role === 'ADMIN') {
+        return (
+          personalDetails.firstName.trim().length > 0 &&
+          personalDetails.lastName.trim().length > 0 &&
+          personalDetails.email.trim().length > 0 &&
+          personalDetails.phone.trim().length > 0 &&
+          adminPassword.trim().length >= 4 &&
+          adminPassword === adminConfirmPassword
+        )
+      }
+
       return (
         personalDetails.firstName.trim().length > 0 &&
         personalDetails.lastName.trim().length > 0 &&
@@ -98,10 +112,10 @@ export default function Register() {
     }
 
     return false
-  }, [step, role, personalDetails, address, documents.length])
+  }, [step, role, personalDetails, address, documents.length, adminPassword, adminConfirmPassword])
 
   const canSubmit = useMemo(() => {
-    return (
+    const baseOk =
       role &&
       personalDetails.firstName.trim() &&
       personalDetails.lastName.trim() &&
@@ -112,8 +126,13 @@ export default function Register() {
       address.state.trim() &&
       address.pincode.trim() &&
       documents.length > 0
-    )
-  }, [role, personalDetails, address, documents.length])
+
+    if (!baseOk) return false
+    if (role === 'ADMIN') {
+      return adminPassword.trim().length >= 4 && adminPassword === adminConfirmPassword
+    }
+    return true
+  }, [role, personalDetails, address, documents.length, adminPassword, adminConfirmPassword])
 
   function updateAcademic(idx, key, value) {
     setAcademicInfoList((prev) => prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)))
@@ -163,6 +182,17 @@ export default function Register() {
       return
     }
 
+    if (role === 'ADMIN') {
+      if (adminPassword.trim().length < 4) {
+        setError('Admin password must be at least 4 characters.')
+        return
+      }
+      if (adminPassword !== adminConfirmPassword) {
+        setError('Admin passwords do not match.')
+        return
+      }
+    }
+
     setLoading(true)
     try {
       const cleanedAcademic = academicInfoList
@@ -190,6 +220,7 @@ export default function Register() {
       const msg = await registerUser(
         {
           role,
+          password: role === 'ADMIN' ? adminPassword : undefined,
           personalDetails: {
             firstName: personalDetails.firstName.trim(),
             lastName: personalDetails.lastName.trim(),
@@ -276,6 +307,18 @@ export default function Register() {
 
                   <button
                     type="button"
+                    onClick={() => setRole('ADMIN')}
+                    className={
+                      role === 'ADMIN'
+                        ? 'rounded-xl border border-emerald-600 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white'
+                        : 'rounded-xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50'
+                    }
+                  >
+                    Admin
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setRole('OWNER')}
                     className={
                       role === 'OWNER'
@@ -328,6 +371,30 @@ export default function Register() {
                   placeholder="Phone"
                 />
               </Field>
+
+              {role === 'ADMIN' ? (
+                <>
+                  <Field label="Admin password">
+                    <input
+                      type="password"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
+                      placeholder="Password"
+                    />
+                  </Field>
+
+                  <Field label="Confirm admin password">
+                    <input
+                      type="password"
+                      value={adminConfirmPassword}
+                      onChange={(e) => setAdminConfirmPassword(e.target.value)}
+                      className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
+                      placeholder="Confirm password"
+                    />
+                  </Field>
+                </>
+              ) : null}
 
               <Field label="Contact no">
                 <input
