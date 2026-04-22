@@ -1,24 +1,19 @@
-# Create Dockerfile in project root
-FROM openjdk:17-jdk-slim
-
+FROM openjdk:17-jdk-slim AS backend
 WORKDIR /app
-
-# Copy Maven wrapper and pom.xml
-COPY mvnw .
-COPY .mvn .mvn
-COPY pom.xml .
-
-# Download dependencies
+COPY mvnw . COPY .mvn .mvn COPY pom.xml .
 RUN ./mvnw dependency:go-offline -B
-
-# Copy source code
 COPY src ./src
-
-# Build the application
 RUN ./mvnw clean package -DskipTests
 
-# Expose port
-EXPOSE 8080
+FROM node:18-alpine AS frontend
+WORKDIR /frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
 
-# Run the application
-CMD ["java", "-jar", "target/cafe-app-0.0.1-SNAPSHOT.jar"]
+FROM nginx:alpine
+COPY --from=frontend /frontend/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/nginx.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
