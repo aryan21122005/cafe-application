@@ -1,10 +1,24 @@
-# Step 1: Build JAR
-FROM maven:3.9.6-eclipse-temurin-17 AS build
-WORKDIR /app
-COPY . .
-RUN mvn clean package -DskipTests
+# Create Dockerfile in project root
+FROM openjdk:17-jdk-slim
 
-# Step 2: Run app
-FROM eclipse-temurin:17-jdk
-COPY --from=build /app/target/*.jar app.jar
-ENTRYPOINT ["java","-jar","/app.jar"]
+WORKDIR /app
+
+# Copy Maven wrapper and pom.xml
+COPY mvnw .
+COPY .mvn .mvn
+COPY pom.xml .
+
+# Download dependencies
+RUN ./mvnw dependency:go-offline -B
+
+# Copy source code
+COPY src ./src
+
+# Build the application
+RUN ./mvnw clean package -DskipTests
+
+# Expose port
+EXPOSE 8080
+
+# Run the application
+CMD ["java", "-jar", "target/cafe-app-0.0.1-SNAPSHOT.jar"]

@@ -1,24 +1,23 @@
 services:
   - type: web
     name: cafe-app-backend
-    env: java
+    env: docker
     plan: free
-    buildCommand: ./mvnw clean package -DskipTests
-    startCommand: java -jar target/cafe-app-0.0.1-SNAPSHOT.jar --spring.profiles.active=supabase
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     envVars:
-      - key: SPRING_PROFILES_ACTIVE
-        value: supabase
-      - key: PORT
-        value: 10000
+      - key: DATABASE_URL
+        value: ${DATABASE_URL}
+      - key: DATABASE_USER
+        value: ${DATABASE_USER}
+      - key: DATABASE_PASSWORD
+        value: ${DATABASE_PASSWORD}
+      - key: EMAIL_HOST
+        value: ${EMAIL_HOST}
+      - key: EMAIL_USERNAME
+        value: ${EMAIL_USERNAME}
+      - key: EMAIL_PASSWORD
+        value: ${EMAIL_PASSWORD}
+      - key: JWT_SECRET
+        value: ${JWT_SECRET}
     healthCheckPath: /api/health
-
-  - type: web
-    name: cafe-app-frontend
-    env: static
-    plan: free
-    buildCommand: cd frontend && npm run build
-    staticPublishPath: frontend/dist
-    routes:
-      - type: rewrite
-        source: /api/*
-        destination: https://cafe-app-backend.onrender.com/api/*
