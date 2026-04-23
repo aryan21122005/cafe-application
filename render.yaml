@@ -5,7 +5,7 @@ services:
     plan: free
     dockerfilePath: ./dockerfile
     dockerContext: .
-    healthCheckPath: /
+    healthCheckPath: /index.html
 
   - type: web
     name: cafe-app-backend
