@@ -1,6 +1,8 @@
 FROM openjdk:17-jdk-slim AS backend
 WORKDIR /app
-COPY mvnw . COPY .mvn .mvn COPY pom.xml .
+COPY mvnw .
+COPY .mvn .mvn
+COPY pom.xml .
 RUN ./mvnw dependency:go-offline -B
 COPY src ./src
 RUN ./mvnw clean package -DskipTests
