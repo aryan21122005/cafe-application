@@ -7,14 +7,14 @@ COPY mvnw .
 COPY .mvn .mvn
 COPY pom.xml .
 
-# Download dependencies
-RUN ./mvnw dependency:go-offline -B
+# Make Maven wrapper executable and download dependencies
+RUN chmod +x ./mvnw && ./mvnw dependency:go-offline -B
 
 # Copy source code
 COPY src ./src
 
 # Build the application
-RUN ./mvnw clean package -DskipTests
+RUN chmod +x ./mvnw && ./mvnw clean package -DskipTests
 
 # Expose port
 EXPOSE 8080
