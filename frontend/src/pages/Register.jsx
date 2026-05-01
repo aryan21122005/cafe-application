@@ -648,7 +648,7 @@ export default function Register() {
             {step < steps.length - 1 ? (
               <button
                 type="button"
-                disabled={step === 0 || !canGoNext}
+                disabled={loading || !canGoNext}
                 onClick={() => {
                   setError('')
                   setSuccess('')
