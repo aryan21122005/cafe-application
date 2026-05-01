@@ -268,26 +268,35 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen bg-[#EDE4DA] text-slate-900">
-      <div className="mx-auto max-w-md px-6 py-12">
-        <Link to="/" className="text-sm text-slate-600 hover:text-slate-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="app-container py-10">
+        <Link to="/" className="inline-flex items-center text-sm font-semibold text-slate-600 hover:text-slate-900">
           Back
         </Link>
 
-        <h2 className="mt-4 text-3xl font-extrabold text-slate-900">Create your account</h2>
-        <p className="mt-2 text-sm text-slate-600">Register to start using Digital Cafe.</p>
-
-        <form onSubmit={onSubmit} className="mt-8 grid gap-4 rounded-2xl border border-black/10 bg-white/70 p-6">
-          <div className="grid gap-2">
-            <div className="text-sm font-semibold text-slate-900">Step {step + 1} of {steps.length}</div>
-            <div className="text-xs text-slate-600">{steps[step]}</div>
-            <div className="h-2 overflow-hidden rounded-full bg-black/10">
-              <div
-                className="h-full bg-emerald-500"
-                style={{ width: `${Math.round(((step + 1) / steps.length) * 100)}%` }}
-              />
+        <div className="mt-6 grid gap-6 md:grid-cols-2 md:items-start">
+          <div className="hidden md:block">
+            <div className="card overflow-hidden">
+              <div className="bg-gradient-to-r from-orange-500 to-rose-500 p-6">
+                <div className="text-sm font-semibold text-white/90">Digital Cafe</div>
+                <div className="mt-1 text-2xl font-extrabold text-white">Create your account</div>
+                <div className="mt-2 text-sm text-white/90">Join as a customer or cafe team member and get started.</div>
+              </div>
+              <div className="p-6 text-sm text-slate-600">Complete the steps and submit your registration.</div>
             </div>
           </div>
+
+          <form onSubmit={onSubmit} className="card p-6">
+            <div className="grid gap-2">
+              <div className="text-sm font-semibold text-slate-900">Step {step + 1} of {steps.length}</div>
+              <div className="text-xs text-slate-600">{steps[step]}</div>
+              <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className="h-full bg-orange-500"
+                  style={{ width: `${Math.round(((step + 1) / steps.length) * 100)}%` }}
+                />
+              </div>
+            </div>
 
           {step === 0 ? (
             <>
@@ -298,8 +307,8 @@ export default function Register() {
                     onClick={() => setRole('CUSTOMER')}
                     className={
                       role === 'CUSTOMER'
-                        ? 'rounded-xl border border-emerald-600 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white'
-                        : 'rounded-xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50'
+                        ? 'btn-primary w-full py-3'
+                        : 'btn-ghost w-full py-3'
                     }
                   >
                     Customer
@@ -311,8 +320,8 @@ export default function Register() {
                     onClick={() => setRole('OWNER')}
                     className={
                       role === 'OWNER'
-                        ? 'rounded-xl border border-emerald-600 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white'
-                        : 'rounded-xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50'
+                        ? 'btn-primary w-full py-3'
+                        : 'btn-ghost w-full py-3'
                     }
                   >
                     Cafe Owner
@@ -328,7 +337,7 @@ export default function Register() {
                 <input
                   value={personalDetails.firstName}
                   onChange={(e) => setPersonalDetails((p) => ({ ...p, firstName: e.target.value }))}
-                  className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
+                  className="input"
                   placeholder="First name"
                 />
               </Field>
@@ -337,7 +346,7 @@ export default function Register() {
                 <input
                   value={personalDetails.lastName}
                   onChange={(e) => setPersonalDetails((p) => ({ ...p, lastName: e.target.value }))}
-                  className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
+                  className="input"
                   placeholder="Last name"
                 />
               </Field>
@@ -347,7 +356,7 @@ export default function Register() {
                   type="email"
                   value={personalDetails.email}
                   onChange={(e) => setPersonalDetails((p) => ({ ...p, email: e.target.value }))}
-                  className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
+                  className="input"
                   placeholder="you@example.com"
                 />
               </Field>
@@ -356,7 +365,7 @@ export default function Register() {
                 <input
                   value={personalDetails.phone}
                   onChange={(e) => setPersonalDetails((p) => ({ ...p, phone: e.target.value }))}
-                  className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
+                  className="input"
                   placeholder="Phone"
                 />
               </Field>
@@ -368,7 +377,7 @@ export default function Register() {
                       type="password"
                       value={adminPassword}
                       onChange={(e) => setAdminPassword(e.target.value)}
-                      className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
+                      className="input"
                       placeholder="Password"
                     />
                   </Field>
@@ -378,7 +387,7 @@ export default function Register() {
                       type="password"
                       value={adminConfirmPassword}
                       onChange={(e) => setAdminConfirmPassword(e.target.value)}
-                      className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
+                      className="input"
                       placeholder="Confirm password"
                     />
                   </Field>
@@ -389,7 +398,7 @@ export default function Register() {
                 <input
                   value={personalDetails.contactNo}
                   onChange={(e) => setPersonalDetails((p) => ({ ...p, contactNo: e.target.value }))}
-                  className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
+                  className="input"
                   placeholder="Contact number"
                 />
               </Field>
@@ -398,7 +407,7 @@ export default function Register() {
                 <select
                   value={personalDetails.gender}
                   onChange={(e) => setPersonalDetails((p) => ({ ...p, gender: e.target.value }))}
-                  className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500"
+                  className="input"
                 >
                   <option value="">Select gender</option>
                   <option value="Male">Male</option>
@@ -412,7 +421,7 @@ export default function Register() {
                 <select
                   value={personalDetails.maritalStatus}
                   onChange={(e) => setPersonalDetails((p) => ({ ...p, maritalStatus: e.target.value }))}
-                  className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500"
+                  className="input"
                 >
                   <option value="">Select status</option>
                   <option value="Single">Single</option>
@@ -430,7 +439,7 @@ export default function Register() {
                 <input
                   value={address.street}
                   onChange={(e) => setAddress((a) => ({ ...a, street: e.target.value }))}
-                  className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
+                  className="input"
                   placeholder="Street"
                 />
               </Field>
@@ -439,7 +448,7 @@ export default function Register() {
                 <input
                   value={address.city}
                   onChange={(e) => setAddress((a) => ({ ...a, city: e.target.value }))}
-                  className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
+                  className="input"
                   placeholder="City"
                 />
               </Field>
@@ -448,7 +457,7 @@ export default function Register() {
                 <input
                   value={address.state}
                   onChange={(e) => setAddress((a) => ({ ...a, state: e.target.value }))}
-                  className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
+                  className="input"
                   placeholder="State"
                 />
               </Field>
@@ -457,7 +466,7 @@ export default function Register() {
                 <input
                   value={address.pincode}
                   onChange={(e) => setAddress((a) => ({ ...a, pincode: e.target.value }))}
-                  className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
+                  className="input"
                   placeholder="Pincode"
                 />
               </Field>
@@ -467,20 +476,20 @@ export default function Register() {
           {step === 3 ? (
             <div className="grid gap-3">
               {academicInfoList.map((row, idx) => (
-                <div key={idx} className="rounded-2xl border border-black/10 bg-white/70 p-4">
+                <div key={idx} className="card-muted p-4">
                   <div className="grid gap-3">
                     <Field label="Institution name">
                       <input
                         value={row.institutionName}
                         onChange={(e) => updateAcademic(idx, 'institutionName', e.target.value)}
-                        className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500"
+                        className="input"
                       />
                     </Field>
                     <Field label="Degree">
                       <input
                         value={row.degree}
                         onChange={(e) => updateAcademic(idx, 'degree', e.target.value)}
-                        className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500"
+                        className="input"
                       />
                     </Field>
                     <Field label="Passing year">
@@ -488,14 +497,14 @@ export default function Register() {
                         type="number"
                         value={row.passingYear}
                         onChange={(e) => updateAcademic(idx, 'passingYear', e.target.value)}
-                        className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500"
+                        className="input"
                       />
                     </Field>
                     <Field label="Grade">
                       <input
                         value={row.grade}
                         onChange={(e) => updateAcademic(idx, 'grade', e.target.value)}
-                        className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500"
+                        className="input"
                       />
                     </Field>
                     <Field label="Grade in percentage">
@@ -504,13 +513,13 @@ export default function Register() {
                         step="0.01"
                         value={row.gradeInPercentage}
                         onChange={(e) => updateAcademic(idx, 'gradeInPercentage', e.target.value)}
-                        className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500"
+                        className="input"
                       />
                     </Field>
                   </div>
 
                   <div className="mt-3 flex items-center justify-between">
-                    <button type="button" onClick={addAcademic} className="text-sm font-semibold text-emerald-700 hover:text-emerald-600">
+                    <button type="button" onClick={addAcademic} className="text-sm font-semibold text-orange-700 hover:text-orange-600">
                       + Add another
                     </button>
                     <button
@@ -530,20 +539,20 @@ export default function Register() {
           {step === 4 ? (
             <div className="grid gap-3">
               {workExperienceList.map((row, idx) => (
-                <div key={idx} className="rounded-2xl border border-black/10 bg-white/70 p-4">
+                <div key={idx} className="card-muted p-4">
                   <div className="grid gap-3">
                     <Field label="Company name">
                       <input
                         value={row.companyName}
                         onChange={(e) => updateWork(idx, 'companyName', e.target.value)}
-                        className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500"
+                        className="input"
                       />
                     </Field>
                     <Field label="Designation">
                       <input
                         value={row.designation}
                         onChange={(e) => updateWork(idx, 'designation', e.target.value)}
-                        className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500"
+                        className="input"
                       />
                     </Field>
                     <Field label="Start date">
@@ -551,7 +560,7 @@ export default function Register() {
                         type="date"
                         value={row.startDate}
                         onChange={(e) => updateWork(idx, 'startDate', e.target.value)}
-                        className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500"
+                        className="input"
                       />
                     </Field>
                     <Field label="End date">
@@ -559,7 +568,7 @@ export default function Register() {
                         type="date"
                         value={row.endDate}
                         onChange={(e) => updateWork(idx, 'endDate', e.target.value)}
-                        className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500"
+                        className="input"
                       />
                     </Field>
                     <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -577,20 +586,20 @@ export default function Register() {
                         step="0.01"
                         value={row.ctc}
                         onChange={(e) => updateWork(idx, 'ctc', e.target.value)}
-                        className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500"
+                        className="input"
                       />
                     </Field>
                     <Field label="Reason for leaving">
                       <input
                         value={row.reasonForLeaving}
                         onChange={(e) => updateWork(idx, 'reasonForLeaving', e.target.value)}
-                        className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-500"
+                        className="input"
                       />
                     </Field>
                   </div>
 
                   <div className="mt-3 flex items-center justify-between">
-                    <button type="button" onClick={addWork} className="text-sm font-semibold text-emerald-700 hover:text-emerald-600">
+                    <button type="button" onClick={addWork} className="text-sm font-semibold text-orange-700 hover:text-orange-600">
                       + Add another
                     </button>
                     <button
@@ -613,14 +622,14 @@ export default function Register() {
                 type="file"
                 multiple
                 onChange={(e) => setDocuments(Array.from(e.target.files || []))}
-                className="rounded-xl border border-black/10 bg-white px-4 py-3 text-sm text-slate-700 outline-none file:mr-4 file:rounded-lg file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slate-900 hover:file:bg-slate-200"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none file:mr-4 file:rounded-lg file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slate-900 hover:file:bg-slate-200"
               />
               <div className="text-xs text-slate-500">Upload PDF/images like ID proof (Aadhar/PAN).</div>
             </Field>
           ) : null}
 
-          {error ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div> : null}
-          {success ? <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{success}</div> : null}
+          {error ? <div className="rounded-xl border border-red-600/20 bg-red-600/10 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+          {success ? <div className="rounded-xl border border-emerald-600/20 bg-emerald-600/10 px-4 py-3 text-sm text-emerald-800">{success}</div> : null}
 
           <div className="mt-2 flex items-center justify-between gap-3">
             <button
@@ -631,7 +640,7 @@ export default function Register() {
                 setSuccess('')
                 setStep((s) => Math.max(0, s - 1))
               }}
-              className="rounded-xl border border-black/10 bg-white/5 px-4 py-3 text-sm font-semibold text-black/70 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn-ghost px-5 py-3 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Back
             </button>
@@ -639,7 +648,7 @@ export default function Register() {
             {step < steps.length - 1 ? (
               <button
                 type="button"
-                disabled={loading || !canGoNext}
+                disabled={step === 0 || !canGoNext}
                 onClick={() => {
                   setError('')
                   setSuccess('')
@@ -649,14 +658,14 @@ export default function Register() {
                   }
                   setStep((s) => Math.min(steps.length - 1, s + 1))
                 }}
-                className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-emerald-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                className="btn-primary px-5 py-3 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Next
               </button>
             ) : (
               <button
                 disabled={loading || !canSubmit}
-                className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-emerald-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                className="btn-primary px-5 py-3 disabled:cursor-not-allowed disabled:opacity-60"
                 type="submit"
               >
                 {loading ? 'Creating...' : 'Register'}
@@ -664,13 +673,14 @@ export default function Register() {
             )}
           </div>
 
-          <div className="text-sm text-gray-300">
+          <div className="text-sm text-slate-700">
             Already have an account?{' '}
-            <Link to="/login" className="text-emerald-300 hover:text-emerald-200">
+            <Link to="/login" className="font-semibold text-orange-700 hover:text-orange-600">
               Login
             </Link>
           </div>
         </form>
+        </div>
       </div>
     </div>
   )

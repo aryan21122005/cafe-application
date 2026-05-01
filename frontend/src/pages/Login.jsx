@@ -53,21 +53,36 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-[#EDE4DA] text-slate-900">
-      <div className="mx-auto max-w-md px-6 py-12">
-        <Link to="/" className="text-sm text-slate-600 hover:text-slate-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="app-container py-10">
+        <Link to="/" className="inline-flex items-center text-sm font-semibold text-slate-600 hover:text-slate-900">
           Back
         </Link>
 
-        <h2 className="mt-4 text-3xl font-extrabold text-slate-900">Welcome back</h2>
-        <p className="mt-2 text-sm text-slate-600">Login to your Digital Cafe account.</p>
+        <div className="mt-6 grid gap-6 md:grid-cols-2 md:items-start">
+          <div className="hidden md:block">
+            <div className="card overflow-hidden">
+              <div className="bg-gradient-to-r from-orange-500 to-rose-500 p-6">
+                <div className="text-sm font-semibold text-white/90">Digital Cafe</div>
+                <div className="mt-1 text-2xl font-extrabold text-white">Welcome back</div>
+                <div className="mt-2 text-sm text-white/90">Sign in to manage orders, menus, and your cafe experience.</div>
+              </div>
+              <div className="p-6 text-sm text-slate-600">
+                Use your username and password to continue.
+              </div>
+            </div>
+          </div>
 
-        <form onSubmit={onSubmit} className="mt-8 grid gap-4 rounded-2xl border border-black/10 bg-white/70 p-6">
+          <div className="card p-6">
+            <h2 className="text-2xl font-extrabold text-slate-900">Sign in</h2>
+            <p className="mt-1 text-sm text-slate-600">Login to your Digital Cafe account.</p>
+
+            <form onSubmit={onSubmit} className="mt-6 grid gap-4">
           <Field label="Username">
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
+              className="input"
               placeholder="e.g. aryan"
               autoComplete="username"
             />
@@ -78,7 +93,7 @@ export default function Login() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="rounded-xl border border-black/10 bg-white px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500"
+              className="input"
               placeholder="••••••••"
               autoComplete="current-password"
             />
@@ -87,21 +102,19 @@ export default function Login() {
           {error ? <div className="rounded-xl border border-red-600/20 bg-red-600/10 px-4 py-3 text-sm text-red-700">{error}</div> : null}
           {success ? <div className="rounded-xl border border-emerald-600/20 bg-emerald-600/10 px-4 py-3 text-sm text-emerald-800">{success}</div> : null}
 
-          <button
-            disabled={loading || !canSubmit}
-            className="mt-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-emerald-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
-            type="submit"
-          >
+          <button disabled={loading || !canSubmit} className="btn-primary mt-2 w-full py-3" type="submit">
             {loading ? 'Signing in...' : 'Login'}
           </button>
 
           <div className="text-sm text-slate-700">
             New here?{' '}
-            <Link to="/register" className="text-emerald-700 hover:text-emerald-600">
+            <Link to="/register" className="font-semibold text-orange-700 hover:text-orange-600">
               Create an account
             </Link>
           </div>
         </form>
+          </div>
+        </div>
       </div>
     </div>
   )

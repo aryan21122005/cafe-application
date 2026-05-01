@@ -13,7 +13,7 @@ function Feature({ title, desc, tone = 'dark' }) {
           : 'rounded-2xl border border-black/10 bg-white/70 p-5'
       }
     >
-      <div className={isLight ? 'text-dg font-semibold text-white' : 'text-lg font-semibold text-slate-900'}>
+      <div className={isLight ? 'text-lg font-semibold text-white' : 'text-lg font-semibold text-slate-900'}>
         {title}
       </div>
       <div className={isLight ? 'mt-2 text-sm text-gray-300' : 'mt-2 text-sm text-slate-600'}>{desc}</div>
@@ -122,83 +122,76 @@ export default function Landing() {
   const [openFaq, setOpenFaq] = useState(0)
 
   return (
-    <div className="min-h-screen bg-[#EDE4DA]">
-      <div
-        className="relative border-b border-black/10"
-        style={{
-          backgroundImage: 'url(/landing-bg.webp)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          height: '700px'
-        }}
-      >
-        <div className="absolute inset-0 bg-black/70" />
+    <div className="min-h-screen bg-slate-50">
+      <div className="border-b border-slate-200 bg-gradient-to-b from-orange-50 via-white to-white">
+        <div className="app-container py-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <img src={logo} alt="Digital Cafe" className="h-11 w-11" />
+              <div className="leading-tight">
+                <div className="text-sm font-extrabold text-slate-900">Digital Cafe</div>
+                <div className="text-xs text-slate-500">Order · Manage · Serve</div>
+              </div>
+            </div>
 
-        <div className="relative z-10 h-full">
-          <div className="h-full bg-gradient-to-b from-emerald-500/15 via-transparent to-transparent">
-            <div className="mx-auto flex h-full max-w-6xl flex-col px-6 py-10">
-              <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Link to="/login" className="btn-ghost">
+                Login
+              </Link>
+              <Link to="/register" className="btn-primary">
+                Register
+              </Link>
+            </div>
+          </div>
 
-                <img src={logo} alt="Digital Cafe" className="h-20 w-20" />
-                {/* <div className="text-white text-xl font-bold">Digital Cafe</div> */}
-                <div className="flex items-center gap-3">
-                  <Link
-                    to="/login"
-                    className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/15"
-                  >
-                    Login
-                  </Link>
-                  <Link
-                    to="/register"
-                    className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-400"
-                  >
-                    Register
-                  </Link>
-                </div>
+          <div className="mt-10 grid gap-8 lg:grid-cols-2 lg:items-center">
+            <div>
+              <div className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
+                For customers · For cafe teams · One platform
+              </div>
+              <h1 className="mt-4 text-4xl font-extrabold leading-tight text-slate-900 sm:text-6xl">
+                Order faster.
+                <span className="block text-orange-600">Serve smarter.</span>
+              </h1>
+              <p className="mt-4 max-w-xl text-slate-600">
+                Customers get a clean ordering experience. Cafe owners and staff get real-time orders, kitchen tickets, and a smooth workflow for daily operations.
+              </p>
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <Link to="/register" className="btn-primary px-5 py-3">
+                  Get started
+                </Link>
+                <Link to="/login" className="btn-ghost px-5 py-3">
+                  I already have an account
+                </Link>
               </div>
 
-              <div className="mt-14 grid flex-1 gap-10 pb-10 lg:grid-cols-2 lg:items-center">
-                <div>
-                  <div className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-gray-100">
-                    For customers · For cafe teams · One platform
-                  </div>
-                  <h1 className="mt-4 text-4xl font-extrabold leading-tight text-white sm:text-6xl">
-                    Order faster.
-                    <span className="block text-emerald-300">Serve smarter.</span>
-                  </h1>
-                  <p className="mt-4 max-w-xl text-gray-100">
-                    Customers get a clean ordering experience. Cafe owners and staff get real-time orders,
-                    kitchen tickets, and a smooth workflow for daily operations.
-                  </p>
-                  <div className="mt-6 flex flex-wrap items-center gap-3">
-                    <Link
-                      to="/register"
-                      className="rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-emerald-950 hover:bg-emerald-400"
-                    >
-                      Get started
-                    </Link>
-                    <Link
-                      to="/login"
-                      className="rounded-xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-semibold text-white hover:bg-white/15"
-                    >
-                      I already have an account
-                    </Link>
-                  </div>
-                  <div className="mt-8 grid grid-cols-3 gap-3">
-                    <Stat value="2x" label="Faster ordering" tone="light" />
-                    <Stat value="Early" label="Booking" tone="light" />
-                    <Stat value="Fast" label="Access" tone="light" />
-                  </div>
+              <div className="mt-8 grid grid-cols-3 gap-3">
+                <div className="card-muted p-4 text-center">
+                  <div className="text-2xl font-extrabold text-slate-900">2x</div>
+                  <div className="mt-1 text-xs text-slate-600">Faster ordering</div>
                 </div>
+                <div className="card-muted p-4 text-center">
+                  <div className="text-2xl font-extrabold text-slate-900">Early</div>
+                  <div className="mt-1 text-xs text-slate-600">Booking</div>
+                </div>
+                <div className="card-muted p-4 text-center">
+                  <div className="text-2xl font-extrabold text-slate-900">Fast</div>
+                  <div className="mt-1 text-xs text-slate-600">Access</div>
+                </div>
+              </div>
+            </div>
 
-                <div className="rounded-3xl border border-white/10 bg-gradient-to-b from-white/15 to-white/5 p-6 backdrop-blur">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Feature tone="light" title="For customers" desc="Browse, order, and track your order in a smooth flow." />
-                    <Feature tone="light" title="For cafe owners" desc="Manage orders, tables, and staff operations in real time." />
-                    <Feature tone="light" title="For kitchen & staff" desc="Clear tickets, status updates, and faster handoffs." />
-                    <Feature tone="light" title="Connected" desc="From Table to Kitchen" />
-                  </div>
-                </div>
+            <div className="card overflow-hidden">
+              <div className="border-b border-slate-200 bg-gradient-to-r from-orange-500 to-rose-500 p-6">
+                <div className="text-sm font-semibold text-white/90">Built for speed</div>
+                <div className="mt-1 text-2xl font-extrabold text-white">From Table to Kitchen</div>
+                <div className="mt-2 text-sm text-white/90">A clean flow for ordering, operations, and staff handoffs.</div>
+              </div>
+              <div className="grid gap-4 p-6 sm:grid-cols-2">
+                <Feature title="For customers" desc="Browse, order, and track your order in a smooth flow." />
+                <Feature title="For cafe owners" desc="Manage orders, tables, and staff operations in real time." />
+                <Feature title="For kitchen & staff" desc="Clear tickets, status updates, and faster handoffs." />
+                <Feature title="Connected" desc="Table → POS → Kitchen → Served" />
               </div>
             </div>
           </div>
@@ -212,7 +205,7 @@ export default function Landing() {
           title="A simple flow for both sides"
           desc="Customers place orders quickly, and your cafe team processes them with clarity."
         />
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
+        <div className="mt-10 grid gap-6 md:grid-cols-3 grid-cols-1">
           <Step n="01" title="Customer orders" desc="Pick items, place an order, and stay updated." />
           <Step n="02" title="Cafe confirms" desc="Owners and staff view new orders instantly." />
           <Step n="03" title="Kitchen prepares" desc="Tickets move from pending to ready smoothly." />
