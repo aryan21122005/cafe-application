@@ -3,29 +3,9 @@ services:
     name: cafe-app-frontend
     env: docker
     plan: free
-    dockerfilePath: ./dockerfile
+    dockerfilePath: ./frontend.dockerfile
     dockerContext: .
-    healthCheckPath: /index.html
-
-  - type: web
-    name: cafe-app-backend
-    env: docker
-    plan: free
-    dockerfilePath: ./backend.dockerfile
-    dockerContext: .
+    healthCheckPath: /
     envVars:
-      - key: DATABASE_URL
-        value: ${DATABASE_URL}
-      - key: DATABASE_USER
-        value: ${DATABASE_USER}
-      - key: DATABASE_PASSWORD
-        value: ${DATABASE_PASSWORD}
-      - key: EMAIL_HOST
-        value: ${EMAIL_HOST}
-      - key: EMAIL_USERNAME
-        value: ${EMAIL_USERNAME}
-      - key: EMAIL_PASSWORD
-        value: ${EMAIL_PASSWORD}
-      - key: JWT_SECRET
-        value: ${JWT_SECRET}
-    healthCheckPath: /api/health
+      - key: VITE_API_BASE_URL
+        value: https://cafe-app-backend-guv2.onrender.com
