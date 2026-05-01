@@ -308,7 +308,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public String changePassword(ChangePasswordRequest request) {
 
         if (request.getUsername() == null || request.getUsername().isBlank()) {
@@ -324,17 +324,21 @@ public class AuthServiceImpl implements AuthService {
             return "Password too short";
         }
 
-        User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        try {
+            User user = userRepository.findByUsername(request.getUsername())
+                    .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
-            return "Invalid credentials";
+            if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+                return "Invalid credentials";
+            }
+
+            user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+            user.setForcePasswordChange(false);
+            userRepository.save(user);
+
+            return "Password changed";
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to change password: " + e.getMessage(), e);
         }
-
-        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
-        user.setForcePasswordChange(false);
-        userRepository.save(user);
-
-        return "Password changed";
     }
 }
