@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || ''
+const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://cafe-app-backend-guv2.onrender.com'
 
 export const api = axios.create({
   baseURL
@@ -55,8 +55,13 @@ export async function updateStaffMenuAvailability(username, menuItemId, availabl
 }
 
 export async function loginUser(payload) {
-  const res = await api.post('/api/auth/login', payload)
-  return res.data
+  try {
+    const res = await api.post('/api/auth/login', payload)
+    return res.data
+  } catch (error) {
+    console.error('Login error:', error.response?.data || error.message)
+    throw error
+  }
 }
 
 export async function listUsers() {
