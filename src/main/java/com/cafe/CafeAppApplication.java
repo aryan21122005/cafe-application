@@ -20,6 +20,7 @@ public class CafeAppApplication {
 			public void addCorsMappings(CorsRegistry registry) {
 				registry.addMapping("/api/**")
 					.allowedOrigins(
+						"https://cafe-app-frontend-s3xf.onrender.com",
 						"https://cafe-application-ekfvrfk7p-aryan21122005s-projects.vercel.app",
 						"http://localhost:3000",
 						"https://localhost:3000"
