@@ -1082,8 +1082,8 @@ export default function AdminDashboard() {
         onClick={() => setSection(item.key)}
         className={
           active
-            ? 'rounded-lg bg-emerald-600/15 px-3 py-2 text-left text-sm font-semibold text-emerald-800'
-            : 'rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-white'
+            ? 'rounded-lg bg-orange-50 px-3 py-2 text-left text-sm font-semibold text-orange-700'
+            : 'rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50'
         }
       >
         {item.label}
@@ -1928,13 +1928,13 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#EDE4DA] text-slate-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="flex h-screen overflow-hidden">
-        <aside className="hidden min-h-0 w-64 flex-col border-r border-black/10 bg-white/70 text-slate-900 md:flex md:sticky md:top-0 md:h-screen overflow-y-auto">
-          <div className="border-b border-black/10 bg-white/60 px-5 py-4 text-lg font-extrabold text-slate-900">Digital Cafe Admin</div>
+        <aside className="hidden min-h-0 w-72 flex-col border-r border-slate-200 bg-white text-slate-900 md:flex md:sticky md:top-0 md:h-screen overflow-y-auto">
+          <div className="border-b border-slate-200 bg-gradient-to-r from-orange-500 to-rose-500 px-5 py-4 text-lg font-extrabold text-white">Digital Cafe Admin</div>
           <div className="px-5 py-6">
             <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-full border border-black/10 bg-white/70" />
+              <div className="h-12 w-12 rounded-full border border-white/20 bg-white/10" />
               <div>
                 <div className="text-sm font-semibold">{session?.username || 'Admin'}</div>
                 <div className="text-xs text-slate-600">Administrator</div>
@@ -1953,7 +1953,7 @@ export default function AdminDashboard() {
 
           <div className="mt-auto px-4 pb-6 pt-4">
             <button
-              className="w-full rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-500/15"
+              className="btn-ghost w-full border border-red-500/30 bg-red-500/10 text-red-700 hover:bg-red-500/15"
               onClick={() => {
                 clearSession()
                 window.location.href = '/login'

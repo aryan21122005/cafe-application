@@ -88,7 +88,7 @@ export default function WaiterDashboard() {
   }, [orders, bookings, tables.length])
 
   return (
-    <div className="rounded-2xl border border-black/10 bg-white/70 p-6">
+    <div className="card p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-xs text-slate-500">Waiter / Orders</div>
@@ -101,8 +101,8 @@ export default function WaiterDashboard() {
               type="button"
               className={
                 (view === 'ready'
-                  ? 'rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white'
-                  : 'rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-white')
+                  ? 'btn-primary'
+                  : 'btn-ghost')
               }
               onClick={() => {
                 setView('ready')
@@ -115,8 +115,8 @@ export default function WaiterDashboard() {
               type="button"
               className={
                 (view === 'history'
-                  ? 'rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white'
-                  : 'rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-white')
+                  ? 'btn-primary'
+                  : 'btn-ghost')
               }
               onClick={() => {
                 setView('history')
@@ -134,7 +134,7 @@ export default function WaiterDashboard() {
                 setPageSize(Number(e.target.value) || 10)
                 setPage(1)
               }}
-              className="rounded-lg border border-black/10 bg-white px-2 py-1"
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1"
             >
               <option value={10}>10</option>
               <option value={25}>25</option>
@@ -142,34 +142,34 @@ export default function WaiterDashboard() {
             </select>
             <span>entries</span>
           </div>
-          <button type="button" className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm" onClick={refresh} disabled={loading}>
+          <button type="button" className="btn-ghost" onClick={refresh} disabled={loading}>
             Refresh
           </button>
         </div>
       </div>
 
       {err ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div> : null}
-      {msg ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{msg}</div> : null}
+      {msg ? <div className="mt-4 rounded-xl border border-emerald-600/20 bg-emerald-600/10 px-4 py-3 text-sm text-emerald-800">{msg}</div> : null}
       {loading ? <div className="mt-4 text-sm text-slate-600">Loading...</div> : null}
 
       <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
-        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+        <div className="card-muted p-4">
           <div className="text-xs font-semibold text-slate-600">Total Orders</div>
           <div className="mt-1 text-2xl font-extrabold">{stats.total}</div>
         </div>
-        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+        <div className="card-muted p-4">
           <div className="text-xs font-semibold text-slate-600">Ready</div>
           <div className="mt-1 text-2xl font-extrabold">{stats.ready}</div>
         </div>
-        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+        <div className="card-muted p-4">
           <div className="text-xs font-semibold text-slate-600">Served</div>
           <div className="mt-1 text-2xl font-extrabold">{stats.served}</div>
         </div>
-        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+        <div className="card-muted p-4">
           <div className="text-xs font-semibold text-slate-600">Approved Bookings</div>
           <div className="mt-1 text-2xl font-extrabold">{stats.approvedBookings}</div>
         </div>
-        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+        <div className="card-muted p-4">
           <div className="text-xs font-semibold text-slate-600">Active Tables</div>
           <div className="mt-1 text-2xl font-extrabold">{stats.uniqueTables}</div>
         </div>
@@ -179,7 +179,7 @@ export default function WaiterDashboard() {
         <div className="mt-4 grid gap-3">
           {listForView.length > 0 ? (
             pagedReady.map((o) => (
-              <div key={o.id} className="rounded-2xl border border-black/10 bg-white/70 p-4">
+              <div key={o.id} className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div className="text-sm font-extrabold text-slate-900">Order #{o.orderNumber ?? o.id}</div>
@@ -196,7 +196,7 @@ export default function WaiterDashboard() {
 
                   <button
                     type="button"
-                    className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+                    className="btn-primary"
                     disabled={loading || view === 'history'}
                     onClick={async () => {
                       setErr('')

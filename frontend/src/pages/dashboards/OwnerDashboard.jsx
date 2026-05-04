@@ -499,10 +499,10 @@ export default function OwnerDashboard() {
           (
             'w-full rounded-xl px-4 py-2 text-left text-sm font-semibold transition ' +
             (active
-              ? 'bg-emerald-600 text-white'
+              ? 'bg-orange-500 text-white'
               : disabled
-                ? 'border border-black/10 bg-white/40 text-slate-400'
-                : 'border border-black/10 bg-white/70 text-slate-800 hover:bg-white')
+                ? 'border border-slate-200 bg-slate-50 text-slate-400'
+                : 'border border-slate-200 bg-white text-slate-800 hover:bg-slate-50')
           ).trim()
         }
       >
@@ -515,7 +515,7 @@ export default function OwnerDashboard() {
     return (
       <button
         type="button"
-        className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+        className="btn-ghost w-full border border-red-500/30 bg-red-500/10 text-red-700 hover:bg-red-500/15"
         onClick={() => {
           clearSession()
           window.location.href = '/login'
@@ -3091,8 +3091,8 @@ export default function OwnerDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#EDE4DA] text-slate-900">
-      <div className="w-full px-4 py-6 md:px-6">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="app-container py-6">
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-xs text-slate-500">Cafe Owner Dashboard</div>
@@ -3100,7 +3100,7 @@ export default function OwnerDashboard() {
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
               <div className="text-slate-600">Current cafe:</div>
               <select
-                className="rounded-xl border border-black/10 bg-white/70 px-4 py-2 text-sm"
+                className="input w-auto py-2"
                 value={selectedCafeId ?? ''}
                 onChange={(e) => {
                   const v = e.target.value
@@ -3124,7 +3124,7 @@ export default function OwnerDashboard() {
               </select>
               <button
                 type="button"
-                className="rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm"
+                className="btn-ghost"
                 onClick={() => refreshCafes(selectedCafeId)}
                 disabled={cafesLoading}
               >
@@ -3132,7 +3132,7 @@ export default function OwnerDashboard() {
               </button>
               <button
                 type="button"
-                className="rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm font-semibold"
+                className="btn-primary"
                 onClick={onAddCafe}
                 disabled={cafeLoading}
               >
@@ -3143,7 +3143,8 @@ export default function OwnerDashboard() {
         </div>
 
         <div className="mt-5 flex h-[calc(100vh-140px)] min-h-0 gap-4 overflow-hidden">
-          <aside className="min-h-0 w-[260px] shrink-0 rounded-2xl border border-black/10 bg-white/70 p-4 sticky top-6 h-[calc(100vh-48px)] overflow-y-auto">
+          <aside className="min-h-0 w-[280px] shrink-0 sticky top-6 h-[calc(100vh-48px)] overflow-y-auto md:block hidden">
+            <div className="card p-4">
             <div className="text-xs font-semibold uppercase text-slate-500">Navigation</div>
             <div className="mt-3 grid gap-1">
               {sidebarItems.map((item) => (
@@ -3158,6 +3159,7 @@ export default function OwnerDashboard() {
 
             <div className="mt-4">
               <SidebarLogoutButton />
+            </div>
             </div>
           </aside>
 
