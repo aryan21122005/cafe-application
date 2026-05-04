@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Getter
@@ -25,9 +27,8 @@ public class CafeDocument {
 
     private Long size;
 
-    @Lob
     @Basic(fetch = FetchType.LAZY)
-    @Column(columnDefinition = "LONGBLOB")
+    @JdbcTypeCode(SqlTypes.BINARY)
     private byte[] data;
 
     @ManyToOne(fetch = FetchType.LAZY)
